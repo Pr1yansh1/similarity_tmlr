@@ -1,0 +1,9 @@
+
+import glob 
+
+
+for textfile in glob.glob("*.txt"): 
+    lst = textfile.split(".") 
+
+    print(lst[0])
+
