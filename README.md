@@ -20,3 +20,10 @@ papers-test:
 folder containing .txt files of all the papers of which similarity will be computed 
 
 resulting matrix of size #num authors * #num_papers 
+
+
+dependencies: 
+
+python packages: 
+
+requests, beautifulsoup4, 
