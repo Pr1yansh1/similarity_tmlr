@@ -1,120 +1,155 @@
-jianqi ma 
-https://ojs.aaai.org/index.php/AAAI/article/download/19904/19663
-http://arxiv.org/pdf/2203.09294
-http://arxiv.org/pdf/2203.09388
+A F M Shahab Uddin 
+https://ieeexplore.ieee.org/ielx7/6287639/6514899/09594804.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09319662.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09459706.pdf
 
-antoine bosselut 
-https://aclanthology.org/2021.findings-acl.107.pdf
-https://aclanthology.org/2021.emnlp-main.588.pdf
+A. Feder Cooper 
+https://ueaeprints.uea.ac.uk/id/eprint/84111/1/Accepted_Manuscript.pdf
+https://dl.acm.org/doi/pdf/10.1145/3531146.3533107
 
-tamim asfour 
+A. Rupam Mahmood 
 
-bishal thapa 
-https://academic.oup.com/innovateage/article-pdf/1/suppl_1/1191/26112756/igx004.4337.pdf
+A. Tuan Nguyen 
+https://www.life-science-alliance.org/content/lsa/6/4/e202201779.full.pdf
+https://academic.oup.com/nar/advance-article-pdf/doi/10.1093/nar/gkac1170/48479767/gkac1170.pdf
+https://ashpublications.org/bloodadvances/article-pdf/doi/10.1182/bloodadvances.2022008123/1928159/bloodadvances.2022008123.pdf
+https://www.nature.com/articles/s41467-022-29822-3.pdf
 
-yonatan loewenstein 
-https://www.nature.com/articles/s41598-022-06861-w.pdf
+A.B. Siddique 
 
-dhruva tb 
+Aadil Oufkir 
 
-dillon maloney 
+Aadirupa Saha 
 
-vadim popov 
-https://doi.org/10.21175/rad.sum.abstr.book.2022.32.2
-https://vestnik-surgery.com/index.php/journal/article/download/1464/pdf
-https://academic.oup.com/eurheartj/article-pdf/41/Supplement_2/ehaa946.2664/34522576/ehaa946.2664.pdf
+Aaditya Ramdas 
 
-michel besserve 
-https://www.nature.com/articles/s41467-022-28897-2.pdf
+Aahlad Manas Puli 
 
-rachit dubey 
-https://www.biorxiv.org/content/biorxiv/early/2022/12/17/2022.12.16.520795.full.pdf
-https://journals.plos.org/ploscompbiol/article/file?id=10.1371/journal.pcbi.1010316&type=printable
-https://psyarxiv.com/8jd2x/download
+Aapo Kyrola 
 
-alexandre péré 
-https://www.frontiersin.org/articles/10.3389/fnbot.2020.555271/pdf
+Aaron Defazio 
+https://link.springer.com/content/pdf/10.1007/s00521-022-07308-z.pdf
 
-marwin segler 
-https://epub.jku.at/obvulioa/content/titleinfo/8307162/full.pdf
+Aaron Ferber 
 
-andrew patterson 
+Aaron Gokaslan 
+http://arxiv.org/pdf/2206.03216
+https://aclanthology.org/2022.bigscience-1.11.pdf
 
-hongning wang 
-http://www.jim.org.cn/EN/article/downloadArticleFile.do?attachType=PDF&id=14650
-http://www.jim.org.cn/CN/article/downloadArticleFile.do?attachType=PDF&id=13877
+Aaron Hertzmann 
 
-guy koren 
-http://link.aps.org/pdf/10.1103/PhysRevD.106.032008
-https://link.springer.com/content/pdf/10.1140/epjc/s10052-022-10489-5.pdf
-https://link.springer.com/content/pdf/10.1140/epjc/s10052-022-10182-7.pdf
+Aaron Klein 
+https://link.springer.com/content/pdf/10.1007%2Fs10801-013-0453-x.pdf
+https://link.springer.com/content/pdf/10.1007%2Fs10801-013-0453-x.pdf
 
-daniel cremers 
+Aaron Lou 
 
-yujun lin 
+A F M Shahab Uddin 
+https://ieeexplore.ieee.org/ielx7/6287639/6514899/09594804.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09319662.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09459706.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/8600701/08755297.pdf
 
-dawn song 
+A F M Shahab Uddin 
+https://ieeexplore.ieee.org/ielx7/6287639/6514899/09594804.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09319662.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09459706.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/8600701/08755297.pdf
 
-ali jadbabaie 
-http://arxiv.org/pdf/2204.01155
+A F M Shahab Uddin 
+https://ieeexplore.ieee.org/ielx7/6287639/6514899/09594804.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09319662.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09459706.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/8600701/08755297.pdf
 
-kostas daniilidis 
-http://arxiv.org/pdf/2203.16529
-http://arxiv.org/pdf/2109.02740
+A. Feder Cooper 
+http://arxiv.org/pdf/2202.05338
+https://dspace.mit.edu/bitstream/1721.1/146496/1/3511265.3550446.pdf
+http://arxiv.org/pdf/2201.11884
 
-prameesha sandamal weerasinghe 
+A. Rupam Mahmood 
+http://arxiv.org/pdf/2008.08157
+https://www.ijcai.org/proceedings/2019/0382.pdf
+http://arxiv.org/pdf/1803.07067
 
-tom erez 
-https://link.springer.com/content/pdf/bfm%3A978-981-15-4095-0%2F1
-http://softwareimpacts.com/article/S2665963820300099/pdf
+A. Tuan Nguyen 
+https://www.life-science-alliance.org/content/lsa/6/4/e202201779.full.pdf
+https://academic.oup.com/nar/advance-article-pdf/doi/10.1093/nar/gkac1170/48479767/gkac1170.pdf
+https://ashpublications.org/bloodadvances/article-pdf/doi/10.1182/bloodadvances.2022008123/1928159/bloodadvances.2022008123.pdf
+https://www.nature.com/articles/s41467-022-29822-3.pdf
+http://www.jbc.org/article/S0021925822011206/pdf
+http://rnajournal.cshlp.org/content/28/7/1028.full.pdf
+https://www.research-collection.ethz.ch/bitstream/20.500.11850/529501/3/AngewChemIntEd-2021-Nguyen-SubstrateProfilingofMitochondrialCaseinolyticProteasePviaaSite%e2%80%90Specific.pdf
+https://www.nature.com/articles/s42003-021-02860-1.pdf
+https://www.nature.com/articles/s41467-021-26533-z.pdf
+https://academic.oup.com/nar/article-pdf/49/11/e62/38713069/gkab132.pdf
+http://rnajournal.cshlp.org/content/26/12/1777.full.pdf
+https://www.nature.com/articles/s41467-020-15674-2.pdf
+https://www.nature.com/articles/s42003-020-1071-5.pdf
+https://www.tandfonline.com/doi/pdf/10.1080/15476286.2020.1868139?needAccess=true
+https://academic.oup.com/nar/article-pdf/48/5/2579/32740816/gkaa018.pdf
 
-huan xu 
-https://francis-press.com/uploads/papers/7G38M4dwgAyNYxBr9lwTQKWTBURyQTioYalgVR3r.pdf
-http://www.resci.cn/CN/article/downloadArticleFile.do?attachType=PDF&id=47275
+A.B. Siddique 
 
-andreas veit 
-https://europepmc.org/articles/pmc2691646?pdf=render
+Aadil Oufkir 
 
-conrad d james 
-https://europepmc.org/articles/pmc6880808?pdf=render
+Aadirupa Saha 
 
-surya bhupatiraju 
+Aaditya Ramdas 
 
-david sontag 
-http://spiral.imperial.ac.uk/bitstream/10044/1/65646/2/119057_2_merged_1542275441.pdf
+Aahlad Manas Puli 
 
-matthias reisser 
+Aapo Kyrola 
 
-jianqi ma 
-https://ojs.aaai.org/index.php/AAAI/article/download/19904/19663
-http://arxiv.org/pdf/2203.09294
-http://arxiv.org/pdf/2203.09388
+Aaron Defazio 
+https://link.springer.com/content/pdf/10.1007/s00521-022-07308-z.pdf
+https://europepmc.org/articles/pmc6996599?pdf=render
+http://arxiv.org/pdf/2001.02518
+http://arxiv.org/pdf/2004.06688
 
-jianqi ma 
-https://ojs.aaai.org/index.php/AAAI/article/download/19904/19663
-http://arxiv.org/pdf/2203.09294
-http://arxiv.org/pdf/2203.09388
+Aaron Ferber 
 
-antoine bosselut 
-https://aclanthology.org/2021.findings-acl.107.pdf
-https://aclanthology.org/2021.emnlp-main.588.pdf
+Aaron Gokaslan 
+http://arxiv.org/pdf/2206.03216
+https://aclanthology.org/2022.bigscience-1.11.pdf
+http://arxiv.org/pdf/2110.02207
+https://purehost.bath.ac.uk/ws/files/210793833/MatryODShka_AttalEtAl_ECCV2020.pdf
 
-tamim asfour 
+Aaron Hertzmann 
+http://arxiv.org/pdf/2109.07431
+http://arxiv.org/pdf/2101.09376
+http://arxiv.org/pdf/2110.03900
+https://ieeexplore.ieee.org/ielx7/8215806/8251248/08251256.pdf
+http://arxiv.org/pdf/2105.04668
+http://arxiv.org/pdf/2002.06260
+http://arxiv.org/pdf/1910.04639
 
-bishal thapa 
-https://academic.oup.com/innovateage/article-pdf/1/suppl_1/1191/26112756/igx004.4337.pdf
+Aaron Klein 
+https://link.springer.com/content/pdf/10.1007%2Fs10801-013-0453-x.pdf
+https://link.springer.com/content/pdf/10.1007%2Fs10801-013-0453-x.pdf
+https://www.cambridge.org/core/services/aop-cambridge-core/content/view/77D697EF52E1A64B784D5C4379CBAD4E/S0013091500017090a.pdf/div-class-title-subsimple-injective-retract-div.pdf
+https://www.cambridge.org/core/services/aop-cambridge-core/content/view/EBD8F37A845FB3C0CA6EBAF6F15F4AF9/S0013091500028017a.pdf/div-class-title-functorial-radicals-and-non-abelian-torsion-ii-div.pdf
+https://www.cambridge.org/core/services/aop-cambridge-core/content/view/9C54E85DFB672B015AD5D8CC8E6CA985/S0013091500016199a.pdf/div-class-title-span-class-italic-t-span-ideals-and-span-class-italic-c-span-ideals-div.pdf
+https://www.ams.org/proc/1971-030-02/S0002-9939-1971-0285581-5/S0002-9939-1971-0285581-5.pdf
 
-yonatan loewenstein 
-https://www.nature.com/articles/s41598-022-06861-w.pdf
+Aaron Lou 
 
-dhruva tb 
+Aaron Mishkin 
+https://link.springer.com/content/pdf/10.1007/s12055-022-01364-9.pdf
+http://deepblue.lib.umich.edu/bitstream/2027.42/170286/2/tid13687_am.pdf
+http://www.jhltonline.org/article/S1053249821004502/pdf
+http://www.jvsvenous.org/article/S2213333X20305242/pdf
+https://wwwnc.cdc.gov/eid/article/27/2/pdfs/20-4046.pdf
+https://academic.oup.com/ofid/article-pdf/6/9/ofz302/33575938/ofz302.pdf
+https://academic.oup.com/ofid/article-pdf/6/9/ofz302/33575938/ofz302.pdf
+https://academic.oup.com/ofid/article-pdf/6/9/ofz302/33575938/ofz302.pdf
 
-dillon maloney 
+Aaron Schein 
+https://link.springer.com/content/pdf/10.1007/s00256-014-2038-8.pdf
 
-vadim popov 
-https://doi.org/10.21175/rad.sum.abstr.book.2022.32.2
-https://vestnik-surgery.com/index.php/journal/article/download/1464/pdf
-https://academic.oup.com/eurheartj/article-pdf/41/Supplement_2/ehaa946.2664/34522576/ehaa946.2664.pdf
-
-michel besserve 
+A F M Shahab Uddin 
+https://ieeexplore.ieee.org/ielx7/6287639/6514899/09594804.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09319662.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/9312710/09459706.pdf
+https://ieeexplore.ieee.org/ielx7/6287639/8600701/08755297.pdf
 
