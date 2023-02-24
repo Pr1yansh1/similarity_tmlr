@@ -3,7 +3,6 @@ import requests
 from bs4 import BeautifulSoup 
 import os 
 
-ß
 cwd = os.getcwd()
 
 file = open('raw_authorlist.txt')
@@ -15,6 +14,8 @@ counter = 0
 no_profile_counter = 0
 
 author_paper_dict = {} 
+
+print(len(file), ": The number of authors in given list.")
 
 with open(output_file_name, 'a+') as f:
     for line in file:  
