@@ -15,7 +15,7 @@ def online_greedy(stream, similarity_matrix, conflicts, k):
     :param similarity_matrix: a matrix that represents the similarity between buyers and goods, 
     similarity_matrix[i][j] represents the similarity score between paper i and reviewer j
     :param conflicts: a dictionary that maps each paper to a list of conflicting reviewers
-    :param k: the maximum number of reviewers to match each buyer with
+    :param k: the maximum number of reviewers to match each paper with
     :return: a dictionary that maps each paper to a list of k non-conflicting reviewers
     """
 
@@ -38,8 +38,8 @@ def online_greedy(stream, similarity_matrix, conflicts, k):
         # Select the k reviewers with the maximum similarity
         max_similarities = heapq.nlargest(k, similarities)
 
-        # Update the matches dictionary with the selected goods
-        matches[paper] = [good for (similarity, good) in max_similarities]
+        # Update the matches dictionary with the selected reviewers
+        matches[paper] = [reviewer for (similarity, reviewer) in max_similarities]
 
         # Remove the selected goods from the list of available goods
         reviewers.difference_update(matches[paper])
