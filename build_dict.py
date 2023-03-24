@@ -186,5 +186,10 @@ def parse_papers(author_folder, paper_folder):
 if __name__ == "__main__":
 
     author_idx, paper_idx, similarity_matrix = parse_papers("./authors-test", "./papers-test")
+    with open("similarity_result.txt", "w") as file:
+        for row in similarity_matrix:
+            for element in row:
+                file.write(str(element) + " ")
+            file.write("\n")
     print(similarity_matrix)
     np.savez("testing.npz", author_idx=author_idx, paper_idx=paper_idx, similarity_matrix=similarity_matrix)
