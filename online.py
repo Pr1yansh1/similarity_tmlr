@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.sparse import csr_matrix
 from cvxopt import matrix, solvers
 INF = 1e5
 
@@ -39,10 +40,21 @@ print("Greedy assignment scores", min(assignment_scores), sum(assignment_scores)
 print("Computing offline oracle assignments..")
 
 # For every r, t, \sum_{p=t}^{t+d} x_{p,r} \leq 1
-A1 = np.zeros((reviewers * (papers-review_time+1), reviewers * papers))
+A1_shape = (reviewers * (papers-review_time+1), reviewers * papers)
+A1_rows, A1_cols = [], []
+
 for r in range(reviewers):
-    for t in range(papers-review_time+1):
-        A1[r * t][r * t: r * (t+review_time)] = 1
+    for t in range(papers-review_time +1):
+        A1_rows.append([r * t] * review_time)
+        A1_cols.append(list(range(r * t, r * (t + review_time))))
+
+data = np.ones(len(A1_rows))
+A1 = csr_matrix((data, (A1_rows, A1_cols)), A1_shape)
+
+#A1 = np.zeros((reviewers * (papers-review_time+1), reviewers * papers))
+#for r in range(reviewers):
+    #for t in range(papers-review_time+1):
+        #A1[r * t][r * t: r * (t+review_time)] = 1
 b1 = np.ones((reviewers * (papers-review_time)))
 
 # For every p, \sum_r x_{p, r} = 3
