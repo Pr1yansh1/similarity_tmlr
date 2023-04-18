@@ -19,7 +19,7 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
     c = np.zeros(num_papers * num_reviewers, dtype=np.double)
     for i in range(num_papers):
         for j in range(num_reviewers):
-            c[i * num_reviewers + j] = -S[i][j]
+            c[i * num_reviewers + j] = S[i][j]
     print("Constructing the sparse constraint matrix:")
     num_cons = num_papers + 3 * num_papers * num_reviewers
     num_vars = num_papers * num_reviewers
@@ -86,3 +86,7 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
 # scores = np.loadtxt("similarity_result.txt")
 scores = np.random.rand(16, 8)
 print(find_match(scores, review_time = 2))
+
+from scipy.stats import rankdata
+print(rankdata(scores, axis=1))
+
