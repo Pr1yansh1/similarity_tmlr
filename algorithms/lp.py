@@ -83,10 +83,13 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
     opt_x = np.array(sol["x"]).reshape(num_papers, num_reviewers)
     return opt_x
 
-# scores = np.loadtxt("similarity_result.txt")
+scores = np.loadtxt("similarity_result.txt")
 scores = np.random.rand(16, 8)
-print(find_match(scores, review_time = 2))
+assignment = find_match(scores, review_time = 2)
+#print("Assignment saved to lp_assignment.txt")
+#np.savetxt("lp_assignment.txt", assignment)
+
 
 from scipy.stats import rankdata
-print(rankdata(scores, axis=1))
+print(assignment, '\n', rankdata(scores, axis=1))
 
