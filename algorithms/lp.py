@@ -2,6 +2,7 @@ import time
 import numpy as np
 from scipy.sparse import csr_matrix
 from cvxopt import matrix, spmatrix, solvers
+from scipy.stats import rankdata
 
 def find_match(S, review_time=6, min_reviewer_per_paper=3):
     """
@@ -19,7 +20,7 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
     c = np.zeros(num_papers * num_reviewers, dtype=np.double)
     for i in range(num_papers):
         for j in range(num_reviewers):
-            c[i * num_reviewers + j] = S[i][j]
+            c[i * num_reviewers + j] = -S[i][j]
     print("Constructing the sparse constraint matrix:")
     num_cons = num_papers + 3 * num_papers * num_reviewers
     num_vars = num_papers * num_reviewers
@@ -83,13 +84,38 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
     opt_x = np.array(sol["x"]).reshape(num_papers, num_reviewers)
     return opt_x
 
-scores = np.loadtxt("similarity_result.txt")
-scores = np.random.rand(16, 8)
-assignment = find_match(scores, review_time = 2)
-#print("Assignment saved to lp_assignment.txt")
-#np.savetxt("lp_assignment.txt", assignment)
+
+def find_greedy(scores, review_time = 6, min_reviewer_per_paper = 3):
+    (num_papers, num_reviewers) = scores.shape
+    INF = 10
+    last_assign = np.full(num_reviewers, INF)
+    greedy_assign = np.zeros((num_papers, num_reviewers))
+
+    for paper in range(num_papers):
+        available_scores = np.where(last_assign >= review_time, scores[paper], 0)
+        greedy_assign[paper, rankdata(-available_scores) <= min_reviewer_per_paper] = 1
+        last_assign += 1    
+        last_assign[greedy_assign[paper].astype(bool)] = 0
+
+    return greedy_assign
+
+def obj_score(scores, assign):
+    return np.sum(scores * assign)
 
 
-from scipy.stats import rankdata
-print(assignment, '\n', rankdata(scores, axis=1))
+# scores = np.loadtxt("similarity_result.txt")
+scores = np.random.rand(30, 15)
+d, lambd = 2, 3
+lp_assign = np.round(find_match(scores, review_time = d, min_reviewer_per_paper =lambd), 2)
+print("Assignment saved to lp_assignment-scratch.txt")
+np.savetxt("lp_assignment-scratch.txt", lp_assign)
 
+greedy_assign = find_greedy(scores, review_time=d, min_reviewer_per_paper=lambd)
+print(lp_assign, '\n', rankdata(-scores, axis=1))
+print( greedy_assign)
+print("LP score", obj_score(scores, lp_assign))
+print("Greedy score", obj_score(scores, greedy_assign))
+print("Competitive ratio", obj_score(scores, greedy_assign)/obj_score(scores, lp_assign))
+
+print(np.sum(lp_assign, axis=0))
+print(np.sum(greedy_assign, axis=0))
