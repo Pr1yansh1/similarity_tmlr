@@ -23,10 +23,7 @@ def checkRule1(A):
 def checkRule2(A,r,c):
     '''Check if one sub matriz have determinant 0,1 or -1'''
     det=A[r[0]][c[0]]*A[r[1]][c[1]]- A[r[1]][c[0]]*A[r[0]][c[1]]
-    if det == 1 or det == -1 or det==0:
-        return True
-    else:
-        return False
+    return det == 1 or det == -1 or det==0
 
 def theoremNo2det(A):
     '''
@@ -42,13 +39,18 @@ def theoremNo2det(A):
         return True
 
 def makeA(p, r, d):
-        Ap = np.zeros((p-d+1, p))
-        for t in range(p-d+1):
-            Ap[t, t:t+d] = 1
+    '''
+        Makes LP constraint matrix whose TUness is sufficient to check
+        for parameters p = # papers, r = # reviewers, d = review time
+        for variables ordered [x11 .. x1p x21 .. x2p ... xr1 .. xrp]
+    '''
+    Ap = np.zeros((p-d+1, p))
+    for t in range(p-d+1):
+        Ap[t, t:t+d] = 1
 
-        I_rowblocks = np.block([np.eye(p)]*r)
-        A_diagblocks = np.kron(np.eye(r, dtype=int), Ap)
-        return np.block([[I_rowblocks], [A_diagblocks]])
+    I_rowblocks = np.block([np.eye(p)]*r)
+    A_diagblocks = np.kron(np.eye(r, dtype=int), Ap)
+    return np.block([[I_rowblocks], [A_diagblocks]])
 
 if __name__ == '__main__':
     #assert len(sys.argv) > 1, "Usage: " + sys.argv[0] + " matrixFile"
