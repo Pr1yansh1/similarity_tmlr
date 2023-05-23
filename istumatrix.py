@@ -14,9 +14,9 @@ def is_totally_unimodular(A):
     for i in range(1, m+1):
         for subrows in combinations(A, i):
             for subcols in combinations(np.array(subrows).T, i):
-                subsqmatrix = np.array(subcols)
+                subsqmatrix = np.array(subcols).T
                 if np.linalg.det(subsqmatrix) not in {-1, 0, 1}:
-                    print(subsqmatrix.T)
+                    print(subsqmatrix, '\n', A)
                     return False
 
     return True

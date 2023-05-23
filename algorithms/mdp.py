@@ -5,13 +5,10 @@ import matplotlib.pyplot as plt
 
 
 
-def mdp(scores, reviews_per_paper = 2):
-    gamma = 0.9
+def mdp(scores, reviews_per_paper = 2, gamma=0.9):
     num_papers, num_reviewers = scores.shape
-
     print(f"# reviewers = {num_reviewers}, # reviews per paper = {reviews_per_paper}")
 
-    # initialize
     states = list(combinations(range(num_reviewers), reviews_per_paper))
     init_expected_score = np.mean(np.max(scores, axis=1)) * reviews_per_paper
     values = { state : init_expected_score / (1 - gamma) for state in states }
@@ -37,7 +34,8 @@ def mdp(scores, reviews_per_paper = 2):
                 values[state] = np.mean([value_in_trial(paper) for paper in batch])
 
         new_values = np.array(list(values.values()))
-        print(epoch, ": change in values ", np.linalg.norm(old_values - new_values))
+        #print(epoch, ": change in values ", np.linalg.norm(old_values - new_values))
+        print(epoch, f"value size: {np.max(old_values)}, change in values {np.max(np.abs(old_values - new_values))}")
 
     def policy(score_vec, state):
         # (takes (s1 .. sr), (r1,  rl)) and returns tuple of assignments
@@ -50,9 +48,10 @@ def mdp(scores, reviews_per_paper = 2):
     return policy
 
 
-def find_mdp(scores, reviews_per_paper = 2):
+def assign(scores, reviews_per_paper = 2):
     num_papers, num_reviewers = scores.shape
-    policy = mdp(np.random.permutation(scores))
+    #policy = mdp(np.random.permutation(scores))
+    policy = mdp(scores, reviews_per_paper)
 
     # assign greedy in first step
     mdp_assign = np.zeros(scores.shape)
@@ -65,6 +64,6 @@ def find_mdp(scores, reviews_per_paper = 2):
 
     return mdp_assign
 
-scores = np.loadtxt('similarity_result.txt')[:, :10]
-np.random.shuffle(scores)
-mdp_assign = find_mdp(scores)
+#scores = np.loadtxt('similarity_result.txt')[:, 10:20]
+#scores = np.array([[np.random.choice([1, 0.01]), 0, 0] for _ in range(64)])
+#mdp_assign = find_mdp(scores, reviews_per_paper=1)

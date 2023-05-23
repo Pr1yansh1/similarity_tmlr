@@ -1,10 +1,10 @@
 import time
 import numpy as np
 from scipy.sparse import csr_matrix
-from cvxopt import matrix, spmatrix, solvers
-from scipy.stats import rankdata
+from cvxopt import matrix, spmatrix, solvers, glpk
 
-def find_match(S, review_time=6, min_reviewer_per_paper=3):
+
+def constraint_matrices(scores, review_time, min_reviewer_per_paper):
     """
     Solve the corresponding linear program to compute the paper-reviewer assignments.
     :param S:   np.array, 2d matrix of shape n_papers x n_reviewers, the similarity matrix.
@@ -12,15 +12,12 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
     :param min_reviewer_per_paper:  # reviewers that each paper should be reviewed.
     :return:    Matching. Solve the standard minimization problem using LP formulation.
     """
-    (num_papers, num_reviewers) = S.shape
+    num_papers, num_reviewers = scores.shape
     print(f"# papers = {num_papers}, # reviewers = {num_reviewers}")
     d = review_time
     lambd = min_reviewer_per_paper
+    c = -np.ravel(scores)
 
-    c = np.zeros(num_papers * num_reviewers, dtype=np.double)
-    for i in range(num_papers):
-        for j in range(num_reviewers):
-            c[i * num_reviewers + j] = -S[i][j]
     print("Constructing the sparse constraint matrix:")
     num_cons = num_papers + 3 * num_papers * num_reviewers
     num_vars = num_papers * num_reviewers
@@ -63,10 +60,10 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
             r = kprime % num_reviewers
             base = num_papers + 2 * num_papers * num_reviewers
             
-            # For every r, p, sum_{t = 0}^{d} x_{(p + t) * num_reviewers + r} <= 1
-            i_idx[k] = base + p * num_reviewers + r # max(p + t, num_papers -1)
-            j_idx[k] = ((p + t) % num_papers) * num_reviewers + r
-            dvals[k] = 1
+            # For every r, p, sum_{t = 0}^{d} x_{(p + t) * num_reviewers + r} <= 1           
+            i_idx[k] = base + p * num_reviewers + r # max(p + t, num_papers -1)           
+            j_idx[k] = min(p + t, num_papers-1) * num_reviewers + r 
+            dvals[k] = 1 if p+t < num_papers else 0 # don't double count last few
             bvals[i_idx[k]] = 1
 
 
@@ -74,48 +71,30 @@ def find_match(S, review_time=6, min_reviewer_per_paper=3):
     G = spmatrix(A.data.tolist(), A.row.tolist(), A.col.tolist(), size=A.shape)
     obj = matrix(c.reshape(-1, 1))
     b = matrix(bvals.reshape(-1, 1))
-    print(f"Shape of the constraint matrix: {A.shape}")
+    return obj, G, b
+
+def lp(scores, review_time=6, min_reviewer_per_paper=3):
+    obj, G, b = constraint_matrices(scores, review_time, min_reviewer_per_paper)
     print("Start solving the LP:")
     start_time = time.time()
     sol = solvers.lp(obj, G, b, solver="glpk")
     #sol = solvers.lp(obj, G, b, solver="mosek")
     end_time = time.time()
     print(f"Time used to solve the LP: {end_time - start_time} seconds.")
-    opt_x = np.array(sol["x"]).reshape(num_papers, num_reviewers)
+    opt_x = np.array(sol["x"]).reshape(scores.shape)
     return opt_x
 
 
-def find_greedy(scores, review_time = 6, min_reviewer_per_paper = 3):
-    (num_papers, num_reviewers) = scores.shape
-    INF = 10
-    last_assign = np.full(num_reviewers, INF)
-    greedy_assign = np.zeros((num_papers, num_reviewers))
-
-    for paper in range(num_papers):
-        available_scores = np.where(last_assign >= review_time, scores[paper], 0)
-        greedy_assign[paper, rankdata(-available_scores) <= min_reviewer_per_paper] = 1
-        last_assign += 1    
-        last_assign[greedy_assign[paper].astype(bool)] = 0
-
-    return greedy_assign
-
-def obj_score(scores, assign):
-    return np.sum(scores * assign)
+def ilp(scores, review_time=6, min_reviewer_per_paper=3):
+    obj, G, b = constraint_matrices(scores, review_time, min_reviewer_per_paper)
+    print("Start solving the ILP:")
+    start_time = time.time()
+    sol2 = glpk.ilp(obj, G, b, B=set(range(len(obj))))
+    end_time = time.time()
+    print(f"Time used to solve the ILP: {end_time - start_time} seconds.")
+    opt_x2 = np.array(sol2[1]).reshape(scores.shape)
+    return opt_x2
 
 
-# scores = np.loadtxt("similarity_result.txt")
-scores = np.random.rand(30, 15)
-d, lambd = 2, 3
-lp_assign = np.round(find_match(scores, review_time = d, min_reviewer_per_paper =lambd), 2)
-print("Assignment saved to lp_assignment-scratch.txt")
-np.savetxt("lp_assignment-scratch.txt", lp_assign)
 
-greedy_assign = find_greedy(scores, review_time=d, min_reviewer_per_paper=lambd)
-print(lp_assign, '\n', rankdata(-scores, axis=1))
-print( greedy_assign)
-print("LP score", obj_score(scores, lp_assign))
-print("Greedy score", obj_score(scores, greedy_assign))
-print("Competitive ratio", obj_score(scores, greedy_assign)/obj_score(scores, lp_assign))
 
-print(np.sum(lp_assign, axis=0))
-print(np.sum(greedy_assign, axis=0))
