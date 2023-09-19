@@ -94,7 +94,3 @@ def ilp(scores, review_time=6, min_reviewer_per_paper=3):
     print(f"Time used to solve the ILP: {end_time - start_time} seconds.")
     opt_x2 = np.array(sol2[1]).reshape(scores.shape)
     return opt_x2
-
-
-
-

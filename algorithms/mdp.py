@@ -1,9 +1,6 @@
-from scipy.stats import rankdata
 import numpy as np
 from itertools import combinations
-import matplotlib.pyplot as plt
-
-
+from scipy.stats import rankdata
 
 def mdp(scores, reviews_per_paper = 2, gamma=0.9):
     num_papers, num_reviewers = scores.shape
