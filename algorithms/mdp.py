@@ -1,3 +1,5 @@
+# compute probabilistically optimal online assignment of reviewers to papers
+# using MDP with simulated score distribution
 import numpy as np
 from itertools import combinations
 from scipy.stats import rankdata
@@ -35,7 +37,7 @@ def mdp(scores, reviews_per_paper = 2, gamma=0.9):
         print(epoch, f"value size: {np.max(old_values)}, change in values {np.max(np.abs(old_values - new_values))}")
 
     def policy(score_vec, state):
-        # (takes (s1 .. sr), (r1,  rl)) and returns tuple of assignments
+        # (takes score vector (s1 .. sr), busy reviewer set (r1 .. rl)) and returns tuple of assignments
         available_reviewers = set(range(num_reviewers)) - set(state)
         actions = list(combinations(available_reviewers, reviews_per_paper))
         q_values = {action : np.sum(score_vec[list(action)]) + gamma * values[action] \
