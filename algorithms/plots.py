@@ -39,9 +39,6 @@ for trial in range(20, 35):
 
     obj_scores_for_trial = [obj_score(scores, assign) for assign in [lp_assign, ilp_assign, greedy_assign, mdp_assign, rank_only_results, rank_greedy_results]] 
     obj_scores.append(obj_scores_for_trial)
-    # assignments.append([scores, randomly_drawn_scores, lp_assign, ilp_assign, greedy_assign, mdp_assign])
-    # obj_scores.append( list(map(lambda assign: obj_score(randomly_drawn_scores, assign),
-    #                             [lp_assign, ilp_assign, greedy_assign, mdp_assign, random_assign]))) 
 
 
 lp, ilp, greedy, mdp, rank_only, *rank_greedy = list(zip(*obj_scores))

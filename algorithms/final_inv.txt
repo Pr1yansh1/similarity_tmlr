@@ -1,0 +1,636 @@
+
+For Trial 1:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0562
+Maximum similarity score for a paper: 0.3418
+75th percentile similarity score for a paper: 0.0783
+
+Rank Greedy:
+Average similarity score for each paper: 0.0599
+Maximum similarity score for a paper: 0.3418
+75th percentile similarity score for a paper: 0.0814
+
+Comparison:
+Same assignments: 432
+Different assignments: 379
+One reviewer different: 343
+Both reviewers different: 36
+Average score difference for papers with different assignments: 0.0081
+
+Total similarity score for Greedy: 45.564610478319345
+Total similarity score for Rank Greedy: 48.61570422792819
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 2:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0451
+Maximum similarity score for a paper: 0.1301
+75th percentile similarity score for a paper: 0.0651
+
+Rank Greedy:
+Average similarity score for each paper: 0.0500
+Maximum similarity score for a paper: 0.1414
+75th percentile similarity score for a paper: 0.0709
+
+Comparison:
+Same assignments: 298
+Different assignments: 513
+One reviewer different: 451
+Both reviewers different: 62
+Average score difference for papers with different assignments: 0.0077
+
+Total similarity score for Greedy: 36.59482617199829
+Total similarity score for Rank Greedy: 40.54215587451168
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 3:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0598
+Maximum similarity score for a paper: 0.1819
+75th percentile similarity score for a paper: 0.0841
+
+Rank Greedy:
+Average similarity score for each paper: 0.0638
+Maximum similarity score for a paper: 0.1847
+75th percentile similarity score for a paper: 0.0898
+
+Comparison:
+Same assignments: 359
+Different assignments: 452
+One reviewer different: 394
+Both reviewers different: 58
+Average score difference for papers with different assignments: 0.0072
+
+Total similarity score for Greedy: 48.498174269065984
+Total similarity score for Rank Greedy: 51.73607606950053
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 4:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0453
+Maximum similarity score for a paper: 0.1500
+75th percentile similarity score for a paper: 0.0628
+
+Rank Greedy:
+Average similarity score for each paper: 0.0484
+Maximum similarity score for a paper: 0.1348
+75th percentile similarity score for a paper: 0.0670
+
+Comparison:
+Same assignments: 378
+Different assignments: 433
+One reviewer different: 388
+Both reviewers different: 45
+Average score difference for papers with different assignments: 0.0057
+
+Total similarity score for Greedy: 36.754072215556064
+Total similarity score for Rank Greedy: 39.228792191615256
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 5:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0475
+Maximum similarity score for a paper: 0.2496
+75th percentile similarity score for a paper: 0.0694
+
+Rank Greedy:
+Average similarity score for each paper: 0.0519
+Maximum similarity score for a paper: 0.2447
+75th percentile similarity score for a paper: 0.0735
+
+Comparison:
+Same assignments: 394
+Different assignments: 417
+One reviewer different: 374
+Both reviewers different: 43
+Average score difference for papers with different assignments: 0.0084
+
+Total similarity score for Greedy: 38.54997792382719
+Total similarity score for Rank Greedy: 42.0507307799326
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 6:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0459
+Maximum similarity score for a paper: 0.1890
+75th percentile similarity score for a paper: 0.0660
+
+Rank Greedy:
+Average similarity score for each paper: 0.0502
+Maximum similarity score for a paper: 0.2390
+75th percentile similarity score for a paper: 0.0714
+
+Comparison:
+Same assignments: 379
+Different assignments: 432
+One reviewer different: 371
+Both reviewers different: 61
+Average score difference for papers with different assignments: 0.0081
+
+Total similarity score for Greedy: 37.23483617337018
+Total similarity score for Rank Greedy: 40.71858839868524
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 7:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0456
+Maximum similarity score for a paper: 0.2103
+75th percentile similarity score for a paper: 0.0628
+
+Rank Greedy:
+Average similarity score for each paper: 0.0499
+Maximum similarity score for a paper: 0.2079
+75th percentile similarity score for a paper: 0.0685
+
+Comparison:
+Same assignments: 401
+Different assignments: 410
+One reviewer different: 358
+Both reviewers different: 52
+Average score difference for papers with different assignments: 0.0085
+
+Total similarity score for Greedy: 36.96094071118479
+Total similarity score for Rank Greedy: 40.44535751076073
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 8:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0552
+Maximum similarity score for a paper: 0.1813
+75th percentile similarity score for a paper: 0.0782
+
+Rank Greedy:
+Average similarity score for each paper: 0.0611
+Maximum similarity score for a paper: 0.1813
+75th percentile similarity score for a paper: 0.0841
+
+Comparison:
+Same assignments: 336
+Different assignments: 475
+One reviewer different: 414
+Both reviewers different: 61
+Average score difference for papers with different assignments: 0.0102
+
+Total similarity score for Greedy: 44.73155592784519
+Total similarity score for Rank Greedy: 49.56954023624285
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 9:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0482
+Maximum similarity score for a paper: 0.2081
+75th percentile similarity score for a paper: 0.0695
+
+Rank Greedy:
+Average similarity score for each paper: 0.0523
+Maximum similarity score for a paper: 0.2081
+75th percentile similarity score for a paper: 0.0749
+
+Comparison:
+Same assignments: 372
+Different assignments: 439
+One reviewer different: 370
+Both reviewers different: 69
+Average score difference for papers with different assignments: 0.0076
+
+Total similarity score for Greedy: 39.06300742513246
+Total similarity score for Rank Greedy: 42.388018744023626
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 10:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0465
+Maximum similarity score for a paper: 0.1888
+75th percentile similarity score for a paper: 0.0668
+
+Rank Greedy:
+Average similarity score for each paper: 0.0505
+Maximum similarity score for a paper: 0.1576
+75th percentile similarity score for a paper: 0.0712
+
+Comparison:
+Same assignments: 360
+Different assignments: 451
+One reviewer different: 380
+Both reviewers different: 71
+Average score difference for papers with different assignments: 0.0073
+
+Total similarity score for Greedy: 37.6827216688969
+Total similarity score for Rank Greedy: 40.96708587292855
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 11:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0488
+Maximum similarity score for a paper: 0.1914
+75th percentile similarity score for a paper: 0.0686
+
+Rank Greedy:
+Average similarity score for each paper: 0.0551
+Maximum similarity score for a paper: 0.2083
+75th percentile similarity score for a paper: 0.0754
+
+Comparison:
+Same assignments: 266
+Different assignments: 545
+One reviewer different: 462
+Both reviewers different: 83
+Average score difference for papers with different assignments: 0.0094
+
+Total similarity score for Greedy: 39.54237499686722
+Total similarity score for Rank Greedy: 44.659954173101966
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 12:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0501
+Maximum similarity score for a paper: 0.2488
+75th percentile similarity score for a paper: 0.0696
+
+Rank Greedy:
+Average similarity score for each paper: 0.0561
+Maximum similarity score for a paper: 0.2844
+75th percentile similarity score for a paper: 0.0754
+
+Comparison:
+Same assignments: 356
+Different assignments: 455
+One reviewer different: 385
+Both reviewers different: 70
+Average score difference for papers with different assignments: 0.0106
+
+Total similarity score for Greedy: 40.61819389657211
+Total similarity score for Rank Greedy: 45.46188080606535
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 13:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0437
+Maximum similarity score for a paper: 0.1886
+75th percentile similarity score for a paper: 0.0626
+
+Rank Greedy:
+Average similarity score for each paper: 0.0487
+Maximum similarity score for a paper: 0.1886
+75th percentile similarity score for a paper: 0.0681
+
+Comparison:
+Same assignments: 344
+Different assignments: 467
+One reviewer different: 386
+Both reviewers different: 81
+Average score difference for papers with different assignments: 0.0086
+
+Total similarity score for Greedy: 35.46252754319923
+Total similarity score for Rank Greedy: 39.47183734796837
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 14:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0521
+Maximum similarity score for a paper: 0.3426
+75th percentile similarity score for a paper: 0.0739
+
+Rank Greedy:
+Average similarity score for each paper: 0.0585
+Maximum similarity score for a paper: 0.3437
+75th percentile similarity score for a paper: 0.0817
+
+Comparison:
+Same assignments: 305
+Different assignments: 506
+One reviewer different: 403
+Both reviewers different: 103
+Average score difference for papers with different assignments: 0.0102
+
+Total similarity score for Greedy: 42.24501856085551
+Total similarity score for Rank Greedy: 47.41962329557808
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 15:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0516
+Maximum similarity score for a paper: 0.3652
+75th percentile similarity score for a paper: 0.0684
+
+Rank Greedy:
+Average similarity score for each paper: 0.0565
+Maximum similarity score for a paper: 0.3652
+75th percentile similarity score for a paper: 0.0746
+
+Comparison:
+Same assignments: 369
+Different assignments: 442
+One reviewer different: 386
+Both reviewers different: 56
+Average score difference for papers with different assignments: 0.0089
+
+Total similarity score for Greedy: 41.885665391827374
+Total similarity score for Rank Greedy: 45.80040254564352
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 16:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0512
+Maximum similarity score for a paper: 0.1705
+75th percentile similarity score for a paper: 0.0711
+
+Rank Greedy:
+Average similarity score for each paper: 0.0571
+Maximum similarity score for a paper: 0.1826
+75th percentile similarity score for a paper: 0.0791
+
+Comparison:
+Same assignments: 341
+Different assignments: 470
+One reviewer different: 406
+Both reviewers different: 64
+Average score difference for papers with different assignments: 0.0101
+
+Total similarity score for Greedy: 41.51515081052851
+Total similarity score for Rank Greedy: 46.282441817673
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 17:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0559
+Maximum similarity score for a paper: 0.2312
+75th percentile similarity score for a paper: 0.0781
+
+Rank Greedy:
+Average similarity score for each paper: 0.0607
+Maximum similarity score for a paper: 0.2312
+75th percentile similarity score for a paper: 0.0833
+
+Comparison:
+Same assignments: 349
+Different assignments: 462
+One reviewer different: 390
+Both reviewers different: 72
+Average score difference for papers with different assignments: 0.0084
+
+Total similarity score for Greedy: 45.34757509732011
+Total similarity score for Rank Greedy: 49.24897938169941
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 18:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0481
+Maximum similarity score for a paper: 0.1568
+75th percentile similarity score for a paper: 0.0687
+
+Rank Greedy:
+Average similarity score for each paper: 0.0543
+Maximum similarity score for a paper: 0.1585
+75th percentile similarity score for a paper: 0.0761
+
+Comparison:
+Same assignments: 318
+Different assignments: 493
+One reviewer different: 405
+Both reviewers different: 88
+Average score difference for papers with different assignments: 0.0102
+
+Total similarity score for Greedy: 39.02383431925018
+Total similarity score for Rank Greedy: 44.04990297182873
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 19:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0354
+Maximum similarity score for a paper: 0.1240
+75th percentile similarity score for a paper: 0.0528
+
+Rank Greedy:
+Average similarity score for each paper: 0.0398
+Maximum similarity score for a paper: 0.1240
+75th percentile similarity score for a paper: 0.0586
+
+Comparison:
+Same assignments: 260
+Different assignments: 551
+One reviewer different: 440
+Both reviewers different: 111
+Average score difference for papers with different assignments: 0.0065
+
+Total similarity score for Greedy: 28.730931367859302
+Total similarity score for Rank Greedy: 32.29025431772041
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 20:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0534
+Maximum similarity score for a paper: 0.3042
+75th percentile similarity score for a paper: 0.0733
+
+Rank Greedy:
+Average similarity score for each paper: 0.0589
+Maximum similarity score for a paper: 0.2666
+75th percentile similarity score for a paper: 0.0801
+
+Comparison:
+Same assignments: 269
+Different assignments: 542
+One reviewer different: 453
+Both reviewers different: 89
+Average score difference for papers with different assignments: 0.0081
+
+Total similarity score for Greedy: 43.334645804939214
+Total similarity score for Rank Greedy: 47.73816819140194
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 21:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0536
+Maximum similarity score for a paper: 0.1600
+75th percentile similarity score for a paper: 0.0758
+
+Rank Greedy:
+Average similarity score for each paper: 0.0579
+Maximum similarity score for a paper: 0.1565
+75th percentile similarity score for a paper: 0.0808
+
+Comparison:
+Same assignments: 363
+Different assignments: 448
+One reviewer different: 388
+Both reviewers different: 60
+Average score difference for papers with different assignments: 0.0077
+
+Total similarity score for Greedy: 43.48930131456659
+Total similarity score for Rank Greedy: 46.95879292351873
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 22:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0532
+Maximum similarity score for a paper: 0.2205
+75th percentile similarity score for a paper: 0.0756
+
+Rank Greedy:
+Average similarity score for each paper: 0.0582
+Maximum similarity score for a paper: 0.2205
+75th percentile similarity score for a paper: 0.0812
+
+Comparison:
+Same assignments: 375
+Different assignments: 436
+One reviewer different: 380
+Both reviewers different: 56
+Average score difference for papers with different assignments: 0.0091
+
+Total similarity score for Greedy: 43.185675485293736
+Total similarity score for Rank Greedy: 47.165391094288154
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 23:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0393
+Maximum similarity score for a paper: 0.1278
+75th percentile similarity score for a paper: 0.0593
+
+Rank Greedy:
+Average similarity score for each paper: 0.0428
+Maximum similarity score for a paper: 0.1613
+75th percentile similarity score for a paper: 0.0617
+
+Comparison:
+Same assignments: 322
+Different assignments: 489
+One reviewer different: 422
+Both reviewers different: 67
+Average score difference for papers with different assignments: 0.0057
+
+Total similarity score for Greedy: 31.873195868703295
+Total similarity score for Rank Greedy: 34.67371379181742
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 24:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0579
+Maximum similarity score for a paper: 0.3022
+75th percentile similarity score for a paper: 0.0774
+
+Rank Greedy:
+Average similarity score for each paper: 0.0639
+Maximum similarity score for a paper: 0.3022
+75th percentile similarity score for a paper: 0.0850
+
+Comparison:
+Same assignments: 283
+Different assignments: 528
+One reviewer different: 442
+Both reviewers different: 86
+Average score difference for papers with different assignments: 0.0091
+
+Total similarity score for Greedy: 46.961012190847725
+Total similarity score for Rank Greedy: 51.79137480714841
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 25:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0546
+Maximum similarity score for a paper: 0.1674
+75th percentile similarity score for a paper: 0.0785
+
+Rank Greedy:
+Average similarity score for each paper: 0.0604
+Maximum similarity score for a paper: 0.1934
+75th percentile similarity score for a paper: 0.0855
+
+Comparison:
+Same assignments: 346
+Different assignments: 465
+One reviewer different: 389
+Both reviewers different: 76
+Average score difference for papers with different assignments: 0.0101
+
+Total similarity score for Greedy: 44.28774327665465
+Total similarity score for Rank Greedy: 48.994351774066175
+Observation: Rank Greedy is doing better in this trial.
+
+For Trial 26:
+----------------------------------------
+
+Greedy:
+Average similarity score for each paper: 0.0530
+Maximum similarity score for a paper: 0.1695
+75th percentile similarity score for a paper: 0.0744
+
+Rank Greedy:
+Average similarity score for each paper: 0.0577
+Maximum similarity score for a paper: 0.1782
+75th percentile similarity score for a paper: 0.0820
+
+Comparison:
+Same assignments: 337
+Different assignments: 474
+One reviewer different: 411
+Both reviewers different: 63
+Average score difference for papers with different assignments: 0.0080
+
+Total similarity score for Greedy: 42.96898814925644
+Total similarity score for Rank Greedy: 46.76006207299165
+Observation: Rank Greedy is doing better in this trial.
+
+Aggregate Results Over All Trials:
+----------------------------------------
+Average similarity score for each paper (Greedy): 0.0499
+Average similarity score for each paper (Rank Greedy): 0.0548
+Average same assignments over all trials: 342.77
+Average different assignments over all trials: 468.23
+Average one reviewer different over all trials: 399.65
+Average both reviewers different over all trials: 68.58
+Average score difference for papers with different assignments over all trials: 0.0084
+Average total similarity score for Greedy over all trials: 40.4656
+Average total similarity score for Rank Greedy over all trials: 44.4242
