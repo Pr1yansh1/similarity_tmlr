@@ -647,4 +647,4 @@ Average score difference for papers with different assignments: 0.0079
 Total similarity score for Greedy: 42.96898814925644
 Total similarity score for Rank Greedy: 46.731920924343136
 Observation: Rank Greedy is doing better in this trial.
-Hypothesis: By introducing randomness, rank-greedy might be making locally sub-optimal choices leading to globally better outcomes.
+
