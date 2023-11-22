@@ -107,42 +107,6 @@ def greedy_rt_assign(scores, review_time=6, min_reviewer_per_paper=3, w_max=1, s
     #print("algorithm has greedy, normal", greedy, normal)
     return greedy_rt_assign
 
-def online_past_ones_algorithm(scores, review_time=6, min_reviewer_per_paper=3, solve_method="lp"):
-    """
-    Online assignment algorithm using past ones approach and offline methods.
-    
-    :param scores: Array of similarity scores. New rows (papers) are added as they arrive online.
-    :param review_time: Review time window.
-    :param min_reviewer_per_paper: Minimum number of reviewers per paper.
-    :param solve_method: Either "lp" for linear programming or "ilp" for integer linear programming.
-    :return: Assignment matrix.
-    """
-
-    num_papers, num_reviewers = scores.shape
-    assignment = np.zeros((num_papers, num_reviewers))
-    
-    # Initially, all expected scores are set to zero
-    expected_scores = np.zeros((num_reviewers))
-
-    # As each paper arrives online, we update the matrix and solve the assignment problem
-    for t in range(num_papers):
-        # Update expected scores based on arrived papers
-        expected_scores = ((expected_scores * t) + scores[t]) / (t + 1)
-
-        # Construct the augmented matrix with actual scores for arrived papers and expected scores for unarrived papers
-        augmented_scores = np.vstack([scores[:t+1], np.tile(expected_scores, (num_papers - t - 1, 1))])
-
-        # Solve assignment using the offline method
-        if solve_method == "lp":
-            current_assignment = lp(augmented_scores, review_time, min_reviewer_per_paper)
-        else:
-            current_assignment = ilp(augmented_scores, review_time, min_reviewer_per_paper)
-        
-        # Store the assignment for the current timestep
-        assignment[t] = current_assignment[t]
-
-    return assignment
-
 def online_past_ones_with_lookahead(actual_scores, sampling_scores, review_time, min_reviewer_per_paper, lookahead=20, solve_method="lp", sample_with_replacement=True):
     num_papers, num_reviewers = actual_scores.shape
     assignment = np.zeros((num_papers, num_reviewers))

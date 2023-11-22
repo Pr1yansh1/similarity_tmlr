@@ -12,8 +12,27 @@ def cumulative_obj_scores(scores, assignments):
     return cum_scores
 
 # Load the similarity scores
-sim_scores = np.loadtxt('similarity_result.txt')
 
+
+print("\n Making plots for full dataset ")
+sim_scores = np.loadtxt('similarity_result.txt')
+num_papers = sim_scores.shape[1]
+
+d, lambd = 2, 2
+factors = [10**(-i) for i in range(8, 11, 3)]
+lookahead = 20 
+
+split_index = int(num_papers * 0.8)
+
+# Splitting along the number of papers dimension
+actual_scores = sim_scores[:, :split_index]
+sampling_scores = sim_scores[:, split_index:] 
+
+x, y = sampling_scores.shape 
+
+# for i in range(x): 
+#     for j in range(y): 
+#         sampling_scores[i, j] = np.random.uniform(0, 1)
 # Assign using both algorithms
 greedy_assignments = assign(sim_scores)
 rank_greedy_assignments = rank_greedy_assign(sim_scores, factor = factors[3])
