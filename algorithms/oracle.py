@@ -147,7 +147,7 @@ def constraint_matrices(scores, review_time, min_reviewer_per_paper):
     return obj, G, b
 
 def lp(scores, review_time=6, min_reviewer_per_paper=3):
-    obj, G, b = constraint_matrices(scores, review_time, min_reviewer_per_paper)
+    obj, G, b = constraint_matrices_modified(scores, review_time, min_reviewer_per_paper)
     print("Start solving the LP:")
     start_time = time.time()
     sol = solvers.lp(obj, G, b, solver="glpk")
