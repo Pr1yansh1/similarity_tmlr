@@ -45,27 +45,28 @@ def constraint_matrices_modified(scores, review_time, min_reviewer_per_paper):
             r = kprime % num_reviewers
             i_idx[k], j_idx[k] = num_papers + p, p * num_reviewers + r
             dvals[k] = 1
-            bvals[num_papers + p] = lambd
+            bvals[i_idx[k]] = lambd
         elif k < 3 * num_papers * num_reviewers:
             # Existing constraint: Assignment >= 0
             kprime = k - 2 * num_papers * num_reviewers
-            i_idx[k], j_idx[k] = 2 * num_papers + kprime, kprime
+            base = 2 * num_papers
+            i_idx[k], j_idx[k] = base + kprime, kprime
             dvals[k] = -1
-            bvals[2 * num_papers + kprime] = 0
+            bvals[i_idx[k]] = 0
         elif k < 4 * num_papers * num_reviewers:
             # Existing constraint: Assignment <= 1
             kprime = k - 3 * num_papers * num_reviewers
-            base = 3 * num_papers
+            base = 2 * num_papers + num_papers * num_reviewers
             i_idx[k], j_idx[k] = base + kprime, kprime
             dvals[k] = 1
-            bvals[base + kprime] = 1
+            bvals[i_idx[k]] = 1
         else:
             # Existing constraint: Reviewer workload in time window
             kprime = k - 4 * num_papers * num_reviewers
             t = kprime // (num_reviewers * num_papers)
             p = (kprime % (num_reviewers * num_papers)) // num_reviewers
             r = kprime % num_reviewers
-            base = 4 * num_papers
+            base = 2 * num_papers + 2 * num_papers * num_reviewers
             
             i_idx[k] = base + p * num_reviewers + r
             j_idx[k] = min(p + t, num_papers-1) * num_reviewers + r 
