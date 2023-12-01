@@ -38,7 +38,7 @@ markers = ['o', 's', '^', 'D', '*', 'p', 'v', '>', '<', 'H', '+', 'x', '|', '_']
 fig, axes = plt.subplots(2, 2, figsize=(15, 15))
 plt.subplots_adjust(wspace=0.3, hspace=0.5)
 
-reviewers = [15]
+reviewers = [15, 20 , 25, 30]
 
 for idx, num in enumerate(reviewers):
     obj_scores = run_trial_for_num_reviewers(num)

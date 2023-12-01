@@ -14,14 +14,15 @@ num_papers = sim_scores.shape[1]
 
 d, lambd = 2, 2
 factors = [10**(-i) for i in range(8, 11, 3)]
-lookahead = 20 
+lookahead = 20  
 
 split_index = int(num_papers * 0.8)
 
 # Splitting along the number of papers dimension
 actual_scores = sim_scores[:, :split_index]
 sampling_scores = sim_scores[:, split_index:] 
-
+num_papers = actual_scores.shape[1]
+total_reviewers = actual_scores.shape[0]
 x, y = sampling_scores.shape 
 
 # for i in range(x): 
@@ -29,21 +30,23 @@ x, y = sampling_scores.shape
 #         sampling_scores[i, j] = np.random.uniform(0, 1)
 
 
-def run_trial_for_num_reviewers():
+def run_trial_for_num_reviewers(num_reviewers):
+    max_trials = total_reviewers // num_reviewers
     obj_scores = []
     
-    for trial in range(1, 27):
-        scores = actual_scores[trial*15 : (trial*15) + 15, :].T
+    for trial in range(1, max_trials):
+        scores = actual_scores[trial* num_reviewers : (trial*num_reviewers) + num_reviewers, :].T
+        #scores = actual_scores[trial*15 : (trial*15) + 15, :].T
 
         lp_assign = oracle.lp(scores, review_time = d, min_reviewer_per_paper =lambd)
     
         greedy_assign = assign(scores, review_time=d, min_reviewer_per_paper=lambd)
         rank_only_results = rank_assign(scores, review_time=d, min_reviewer_per_paper=lambd)
         rank_greedy_results = [rank_greedy_assign(scores, review_time=d, min_reviewer_per_paper=lambd, factor=f) for f in factors]
-        greedy_rt_results = greedy_rt_assign(scores, review_time=d, min_reviewer_per_paper=lambd)
+        #greedy_rt_results = greedy_rt_assign(scores, review_time=d, min_reviewer_per_paper=lambd)
         past_ones_results = online_past_ones_with_lookahead(scores, sampling_scores, review_time=d, min_reviewer_per_paper=lambd, lookahead=lookahead)
 
-
+        
         for time_step in range(len(scores)):
             print(f"\nTime Step {time_step + 1}:")
             print("Greedy Assignment:")
@@ -53,7 +56,7 @@ def run_trial_for_num_reviewers():
             print("Oracle assignment") 
             print(lp_assign[time_step])
 
-        obj_scores_for_trial = [obj_score(scores, res) for res in [lp_assign, greedy_assign, rank_only_results, greedy_rt_results, past_ones_results] + rank_greedy_results]
+        obj_scores_for_trial = [obj_score(scores, res) for res in [lp_assign, greedy_assign, rank_only_results, past_ones_results] + rank_greedy_results]
         obj_scores.append(obj_scores_for_trial)
     
     return obj_scores
@@ -63,20 +66,20 @@ markers = ['o', 's', '^', 'D', '*', 'p', 'v', '>', '<', 'H', '+', 'x', '|', '_']
 fig, axes = plt.subplots(2, 2, figsize=(15, 15))
 plt.subplots_adjust(wspace=0.3, hspace=0.5)
 
-reviewers = [15]
+reviewers = [15, 20, 25, 30]
 
 for idx, num in enumerate(reviewers):
-    obj_scores = run_trial_for_num_reviewers()
+    obj_scores = run_trial_for_num_reviewers(num)
     ax = axes[idx//2, idx%2]
 
     # Unpack the objective scores for different algorithms
-    lp_assign, greedy_scores, rank_only, greedy_rt_results, past_ones, *rank_greedy = list(zip(*obj_scores))
+    lp_assign, greedy_scores, rank_only, past_ones, *rank_greedy = list(zip(*obj_scores))
     
     # Plot the results for each algorithm
     ax.plot(lp_assign, label = "LP oracle", marker = markers[4])
     ax.plot(greedy_scores, label='Greedy', marker=markers[0])
     ax.plot(rank_only, label='Rank Only', marker=markers[1])
-    ax.plot(greedy_rt_results, label='Greedy RT', marker=markers[2])
+    #ax.plot(greedy_rt_results, label='Greedy RT', marker=markers[2])
     ax.plot(past_ones, label='Past Ones with Lookahead', marker=markers[3])
 
     for i, factor in enumerate(factors):

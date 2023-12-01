@@ -107,28 +107,72 @@ def greedy_rt_assign(scores, review_time=6, min_reviewer_per_paper=3, w_max=1, s
     #print("algorithm has greedy, normal", greedy, normal)
     return greedy_rt_assign
 
+# def online_past_ones_with_lookahead(actual_scores, sampling_scores, review_time, min_reviewer_per_paper, lookahead=20, solve_method="lp", sample_with_replacement=True):
+#     num_papers, num_reviewers = actual_scores.shape
+#     assignment = np.zeros((num_papers, num_reviewers))
+#     last_assign = np.full(num_reviewers, review_time)
+
+#     for t in range(num_papers):
+#         # Create an augmented score matrix for lookahead
+#         augmented_scores = np.zeros((lookahead, num_reviewers))
+#         augmented_scores[0] = actual_scores[t]
+
+#         # Adjust the sampling process to match the number of reviewers
+#         for i in range(1, lookahead):
+#             if sample_with_replacement:
+#                 # Randomly select a paper's index with replacement
+#                 sample_idx = np.random.choice(sampling_scores.shape[1])
+#             else:
+#                 # Move through the papers without replacement, wrapping around if needed
+#                 sample_idx = (t + i) % sampling_scores.shape[1]
+
+#             # Sample scores for the selected paper, matching the number of reviewers
+#             sampled_scores = sampling_scores[:, sample_idx]
+#             augmented_scores[i, :len(sampled_scores)] = sampled_scores[:num_reviewers]
+
+#         # Solve the assignment using an offline method
+#         if solve_method == "lp":
+#             lookahead_assignment = lp(augmented_scores, review_time, min_reviewer_per_paper)
+#         else:
+#             lookahead_assignment = ilp(augmented_scores, review_time, min_reviewer_per_paper)
+
+#         # Assign reviewers for the current paper
+#         current_assignment = lookahead_assignment[0]
+#         assignment[t] = current_assignment
+
+#         # Update last assignment time for reviewers
+#         for reviewer in range(num_reviewers):
+#             if current_assignment[reviewer] == 1:
+#                 last_assign[reviewer] = 0
+#             else:
+#                 if last_assign[reviewer] < review_time:
+#                     last_assign[reviewer] += 1
+
+#     return assignment
+
+
+
 def online_past_ones_with_lookahead(actual_scores, sampling_scores, review_time, min_reviewer_per_paper, lookahead=20, solve_method="lp", sample_with_replacement=True):
     num_papers, num_reviewers = actual_scores.shape
     assignment = np.zeros((num_papers, num_reviewers))
     last_assign = np.full(num_reviewers, review_time)
 
     for t in range(num_papers):
-        # Create an augmented score matrix for lookahead
-        augmented_scores = np.zeros((lookahead, num_reviewers))
-        augmented_scores[0] = actual_scores[t]
+        # Check available reviewers
+        available_reviewers = [i for i in range(num_reviewers) if last_assign[i] >= review_time]
 
-        # Adjust the sampling process to match the number of reviewers
+        # Create an augmented score matrix for lookahead with available reviewers
+        augmented_scores = np.zeros((lookahead, len(available_reviewers)))
+        augmented_scores[0] = actual_scores[t, available_reviewers]
+
         for i in range(1, lookahead):
             if sample_with_replacement:
-                # Randomly select a paper's index with replacement
                 sample_idx = np.random.choice(sampling_scores.shape[1])
             else:
-                # Move through the papers without replacement, wrapping around if needed
                 sample_idx = (t + i) % sampling_scores.shape[1]
 
-            # Sample scores for the selected paper, matching the number of reviewers
             sampled_scores = sampling_scores[:, sample_idx]
-            augmented_scores[i, :len(sampled_scores)] = sampled_scores[:num_reviewers]
+            augmented_scores[i, :len(sampled_scores)] = sampled_scores[available_reviewers]
 
         # Solve the assignment using an offline method
         if solve_method == "lp":
@@ -136,8 +180,11 @@ def online_past_ones_with_lookahead(actual_scores, sampling_scores, review_time,
         else:
             lookahead_assignment = ilp(augmented_scores, review_time, min_reviewer_per_paper)
 
-        # Assign reviewers for the current paper
-        current_assignment = lookahead_assignment[0]
+        # Map back lookahead assignment to original reviewers
+        current_assignment = np.zeros(num_reviewers)
+        for i, reviewer in enumerate(available_reviewers):
+            current_assignment[reviewer] = lookahead_assignment[0][i]
+
         assignment[t] = current_assignment
 
         # Update last assignment time for reviewers
