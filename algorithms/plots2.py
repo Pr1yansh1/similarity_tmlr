@@ -2,6 +2,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import oracle, greedy, mdp, randomassign
+import csv
 
 # Assuming you have these in your environment or another module
 from online import greedy_rt_assign, rank_assign
@@ -16,7 +17,7 @@ obj_scores = []
 assignments = []
 
 for trial in range(20, 35):
-    scores = sim_scores[:, trial * 15 : trial * 15 + 15]
+    scores = sim_scores[:, trial * 15 : trial * 15 +8]
 
     lp_assign = oracle.lp(scores, review_time=d, min_reviewer_per_paper=lambd)
     ilp_assign = oracle.ilp(scores, review_time=d, min_reviewer_per_paper=lambd)
@@ -31,7 +32,16 @@ for trial in range(20, 35):
     obj_scores.append(list(map(lambda assign: obj_score(randomly_drawn_scores, assign),
                                [lp_assign, ilp_assign, greedy_assign, greedy_rt, rank_based, mdp_assign, random_assign])))
 
-lp, ilp, greedy_, greedy_rt, rank_based, mdp_, rnd = list(zip(*obj_scores))  
+lp, ilp, greedy_, greedy_rt, rank_based, mdp_, rnd = list(zip(*obj_scores))
+
+csv_file = 'data.csv'
+
+# Write data to CSV file
+with open(csv_file, 'w', newline='') as csvfile:
+    writer = csv.writer(csvfile)
+    for i, row in enumerate(obj_scores):
+        row.insert(0, i)
+        writer.writerow(row)
 
 print(greedy_) 
 print(ilp)
@@ -49,3 +59,4 @@ plt.ylim(ymin=0)
 plt.title('Policy comparison for real scores, drawn without replacement')
 np.savetxt('assignments.txt', np.ravel(np.array(assignments)))
 plt.show()
+
