@@ -1,0 +1,839 @@
+GIT-Net: Generalized Integral Transform
+for Operator Learning
+Anonymous authors
+Paper under double-blind review
+Abstract
+This article proposes GIT-Net, a novel deep neural network architecture for approximat-
+ing Partial Differential Equation (PDE) operators. GIT-Net takes inspiration from integral
+transform operators and exploits the fact that common operations (eg. differential op-
+erators) used for defining PDEs can often be represented parsimoniously when expressed
+on appropriate functional bases (e.g. Fourier basis). Unlike fixed integral transforms, the
+proposed GIT-Net architecture utilizes the power of deep neural networks as efficient func-
+tion approximators. Furthermore, when compared to several recently proposed alternatives,
+the computational and memory requirements of GIT-Net scale gracefully with mesh dis-
+cretizations, making it easy to apply to PDE problems defined on complex geometries. Our
+experiments demonstrate that GIT-Net is a competitive neural network operator, with both
+asmalltesterrorandlowevaluationcostacrossarangeofPDEproblems. Thisisincontrast
+to existing neural network operators, which often excel in only one of these aspects.
+1 Introduction
+Partialdifferentialequations(PDEs)areavitalmathematicaltoolinthestudyofphysicalsystems, providing
+a means to model, control, and predict the behavior of these systems. The solution of PDEs is an essen-
+tial component of many computational tasks, such as optimization of complex systems (Tröltzsch, 2010),
+Bayesian inference (Stuart, 2010; El Moselhy & Marzouk, 2012), and uncertainty quantification (Smith,
+2013). Traditional methods for solving PDEs, such as finite element methods (Bathe, 2007), finite volume
+methods (Eymard et al., 2000), and finite difference methods (Liszka & Orkisz, 1980), are based on the
+finite-dimensional approximation of infinite-dimensional function spaces by discretizing the PDE on prede-
+fined sampling points. However, the increasing demands for PDE solvers with lower computational cost,
+greater flexibility on complex domains and conditions, and adaptability to different PDEs have led to the
+development of modern scientific computing and engineering techniques.
+The recent advances in neural network methodologies, particularly their ability to process large datasets and
+approximate complex functions, have made them promising candidates for solving PDEs Blechschmidt &
+Ernst (2021). There are two main approaches to using neural networks for approximating solutions to PDEs:
+function learning and operator learning. These methods have demonstrated their effectiveness in addressing
+the challenges associated with PDE solvers.
+Neural networks for function learning Neural networks have been widely used as a powerful tool for
+approximating complex functions. In this framework, solutions to PDEs are parametrized by deep neural
+networks whose weights are obtained by minimizing an appropriate loss function (E & Yu, 2018; Raissi
+et al., 2019; Bar & Sochen, 2019; Smith et al., 2020; Pan & Duraisamy, 2020; Sirignano & Spiliopoulos, 2018;
+Zang et al., 2020; Karniadakis et al., 2021). For instance, physics-informed neural networks (PINNs) (Raissi
+et al., 2019), approximate solutions to PDEs by minimizing a loss functions consisting of residual terms
+approximating the physical model and errors for initial/boundary conditions. The theoretical understanding
+1of this emerging class of methods is an active area of research (He et al., 2020; E et al., 2019; Shin et al.,
+2020; Daubechies et al., 2022). Compared with more traditional methods (eg. finite volume, finite elements),
+PINNs are mesh-free and can therefore be applied flexibly to a wide range of PDEs without specifying a fixed
+space-discretization. Additionally, by exploiting high-level automatic differentiation frameworks Bradbury
+et al. (2018); Paszke et al. (2017), derivative calculations and optimizations can be easily performed without
+considering the specific regularity properties of the PDEs. However, PINNs need to be retrained for new
+instances, making them inefficient in scenarios where PDEs need to be solved repeatedly, as is common for
+instance in (Bayesian) inverse problems Stuart (2010).
+Neural networks for operator learning Given a PDE, the operator that maps the set of input functions
+(eg. boundaryconditions,sourceterms,diffusioncoefficients)tothesolutionofthePDEcanbeapproximated
+with deep neural networks. In prior work (Guo et al., 2016; Zhu & Zabaras, 2018; Adler & Öktem, 2017;
+Bhatnagar et al., 2019; Khoo et al., 2021), surrogate operators parametrized by deep convolutional neural
+networks (CNNs) have been employed as a mapping between finite-dimensional function spaces defined
+on predefined coordinate points. These methods address the need for repeated evaluations of PDEs in
+applications such as inverse problems, Bayesian inference, and Uncertainty Quantification (UQ). However,
+the training of these networks is not straightforward for meshes of varying resolutions, and for complex
+geometries. furthermore, interpolation techniques are required for evaluating the solutions at coordinates
+outside the predefined set of coordinate points the approximate operator has been trained on. More recently,
+and as followed in the present article, the problem of approximating a PDE operator has been formulated
+as a regression problem between infinite-dimensional function spaces (Long et al., 2018; 2019; Hesthaven &
+Ubbiali, 2018; Bhattacharya et al., 2021; Li et al., 2021; Lu et al., 2021). In the PDE-Net methodology of
+Long et al. (2018; 2019), the underlying hidden PDE models are uncovered by training feed-forward deep
+neural networks given observed dynamic data. In the Fourier Neural Operator (FNO) of Li et al. (2021), the
+Fourier transform is leveraged to efficiently parametrized integral transforms. The universal approximation
+of this approach is discussed in Kovachki et al. (2021). The DeepONet approach of Lu et al. (2021) encodes
+the input function space and the domain of the output function by using two separate networks; this method
+was later improved upon in Lu et al. (2022) by using Principal Component Analysis (PCA), a technique
+also referred to as the Proper Orthogonal Decomposition (POD) or Karhunen-Loeve expansions in other
+communities. More recently, Bhattacharya et al. (2021) developed a general model-reduction framework
+consisting in defining approximate mappings between PCA-based approximations defined on the input and
+output function spaces. The PCA-Net neural architecture Bhattacharya et al. (2021); Hesthaven & Ubbiali
+(2018) belongs to this class of methods. An important advantage of this class of methods is that the
+resulting approximate operators are mesh-independent: these operators can easily be applied to different
+settings when functions are approximated on different resolutions. Some of these approaches have been
+compared and discussed in terms of their accuracy, memory cost, and evaluation in previous work such
+as Lu et al. (2022); de Hoop et al. (2022). These studies indicate that the FNO approach is competitive
+in terms of accuracy for most PDE problems defined on structured grids but may require modifications
+for more complex geometries. These comparative studies also hint that DeepONet-type methods are more
+flexible and accurate when used to tackle complex geometries. Finally, the PCA-NetBhattacharya et al.
+(2021); Hesthaven & Ubbiali (2018) architecture is more advantageous in terms of its lower memory and
+computational requirements. Nevertheless, as our numerical experiments presented in Section 5 indicate,
+the simplistic PCA-Net approach can struggle to reach high predictive accuracies when used to approximate
+complex PDE operators; we postulate that it is because the PCA-Net architecture is very general and does
+not incorporate any model-structure contrarily to, for instance, the FNO approach. A recently proposed
+method called MAD (Huang et al., 2021) also achieves mesh-independent evaluation through the use of a
+two-stage process involving training the model and finding a latent space for new instances.
+Ourcontribution Weproposeanovelneuralnetworkoperator,theGeneralizedIntegralTransformNeural
+Network (GIT-Net), for operator learning between infinite-dimensional function spaces as a solver for partial
+differential equations (PDEs).
+2•The GIT-Net architecture is derived from the remark that a large class of operators commonly used
+to define PDEs (eg. differential operators such as the gradient or the divergence operator) can be
+diagonalized in appropriate functional bases (eg. Fourier basis). Compared to other widely used
+integraltransformssuchastheFouriertransformortheLaplacetransform, GIT-Nettakesadvantage
+of the ability of neural networks to efficiently learn appropriate bases in a data-driven manner. This
+allows GIT-Net to provide improved accuracy and flexibility.
+•Inspired by the model reduction techniques presented in Bhattacharya et al. (2021), GIT-Net cru-
+cially depends on Principal Component Analysis (PCA) bases of functions. Because both the input
+and output functions are represented using their PCA coefficients, the proposed method is robust to
+mesh discretization and enjoys favorable computational costs. When using O(Np)sampling points
+to approximate functions, the GIT-Net approach results in an evaluation cost that scales as O(Np)
+floating point operations; it is significantly more efficient than the O(Nplog(Np))evaluation costs
+of the FNO architecture (Li et al., 2021).
+•The proposed GIT-Net architecture is compared to modern methods for data-driven operator learn-
+ing, including PCA-Net, POD-DeepONet, and FNO. For this purpose, the different methods are
+evaluated on five PDE problems with complex domains and input-output functions of varying di-
+mensions. The numerical experiments suggest that, when compared to existing methods, GIT-Net
+consistently achieves high-accuracy predictions with low evaluation costs when used for approxi-
+mating the solutions to PDEs defined on rectangular grids or on more complex geometries. This
+advantage is particularly pronounced for large-scale problems defined on complex geometries.
+The rest of the paper is structured as follows. Section 2 describes the GIT-Net architecture. Section 3
+provides an overview of the PDE problems used for evaluating the different methods. The hyperparameters
+of the GIT-Net are studied numerically and discussed in Section 4. A comparison of the GIT-Net with
+various other neural network operators is presented in Section 5. Finally, we present our conclusions in
+Section 6. Codes and datasets are publicly available1.
+2 Method
+Consider two Hilbert spaces of functions U={f: Ωu→Rdin}andV={g: Ωv→Rdout}respectively defined
+on the input domain Ωuand output domain Ωv. Forf∈Uwe have that f(x) = (f1(x),...,fdin(x))∈Rdin
+forx∈Ωu, and similarly for functions g∈V. The purpose of this text is to approximate an unknown
+operatorF:U→Vfrom a finite training set of Ntrain≥1pairs (fi,gi)Ntrain
+i=1withgi=F(fi). We seek to
+approximate the operator Fwith the member N≡Nθof a parametric family of operators indexed by the
+(finite-dimensional) parameter θ∈Θ. Ideally, for a probability distribution µ(df)of interest on the input
+space of functions U, the ideal parameter θ⋆∈Θis chosen so that it minimizes the risk defined as
+θ∝⇕⊣√∫⊔≀→Ef∼µ/bracketleftbig
+∥F(f)−Nθ(f)∥2
+V/bracketrightbig
+. (1)
+For Bayesian Inverse Problems, the distribution µ(df)is typically chosen as the Bayesian prior distribution,
+or as an approximation of the Bayesian posterior distribution obtained from computationally cheap methods
+(eg. Gaussian-like approximations). An explicit regularization term such as Reg(θ) =λ∥θ∥2when Θ⊂RdΘ
+can certainly be added to the risk (1); for convenience, this term is not included. Since only a finite set of
+training samples is typically available, empirical risk minimization is used instead and the following loss is
+minimized,
+L(θ) =1
+NtrainNtrain/summationdisplay
+i=1∥F(fi)−Nθ(fi)∥2
+V. (2)
+1Github: https://anonymous.4open.science/r/Operator-Learning-Generalized-integral-transform-neural-network-A2B8
+3Equation (2) describes a standard regression problem, although expressed in an infinite dimensional space of
+functions. The loss function (2) can be minimized with a variant of the stochastic gradient descent algorithm.
+In the numerical experiments presented in Section 5, we used the standard ADAM optimizer (Kingma &
+Ba, 2015).
+Astandardmethodforapproachingthisinfinitedimensionalregressionproblemistoexpressallthequantities
+on functional bases and consider finite-dimensional approximations. Let {eu,k}k≥1and{ev,k}k≥1be two
+bases of functions of the Hilbert spaces UandVrespectively so that functions f∈Uandg∈Vcan be
+expressed as
+f=/summationdisplay
+k≥1αu,k(f)eu,kandg=/summationdisplay
+k≥1αv,k(g)ev,k (3)
+for coefficients αu,k(f)∈Randαv,k(g)∈R. Truncating these expansions at a finite order provides finite-
+dimensional representations of each element of UandV,
+f∝⇕⊣√∫⊔≀→[αu,1(f),...,αu,Nu(f)]∈RNu
+g∝⇕⊣√∫⊔≀→[αv,1(g),...,αv,Nv(g)]∈RNv,
+and transforms the infinite-dimensional regression problem (2) into a standard finite-dimensional regression
+setting. For example, the PCA-Net approach (Bhattacharya et al., 2021; de Hoop et al., 2022) approximates
+the resulting finite dimensional mapping /hatwideF:RNu→RNvwith a standard fully-connected multilayer per-
+ceptron(MLP) and use Karhunen–Loeve expansions (i.e. PCA) of the probability distributions µand its
+push-forwardF#(µ)as functional bases. Other approaches are reviewed in Section 5.1.
+2.1 Generalized Integral Transform mapping
+This section describes GIT-Net, a neural architecture that generalizes the Fourier Neural Operator (FNO)
+approach (Li et al., 2021). It also takes inspiration from the Depthwise Separable Convolutions architec-
+ture (Chollet, 2017) that has proven useful for tackling computer vision problems. Depthwise Separable
+Convolutions factorize convolutional filters into shared channel-wise operations that are combined in a final
+processing step. This factorization allows one to significantly reduce the number of learnable parameters
+and mitigate overfitting issues.
+For clarity, we first describe the GIT-Net architecture in function space since the finite discretization is
+straightforward and amounts to considering finite basis expansions instead of infinite ones. The GIT-Net
+mapping relies on the remark that mappings F:U →V that represent solutions to partial differential
+equations (PDE)areoftenparsimoniouslyrepresentedwhenexpressedusingappropriatebases. Forexample,
+a large class of linear PDEs can be diagonalized in the Fourier basis. Naturally, spectral methods do rely on
+similar principles. The GIT-Net mapping described in Section 2.2 is defined as a composition of mappings
+that transform functions f: Ω→RC, whereC≥1denotes the number of channels in the computer-vision
+terminology, to functions g: Ω→RC. We first describe a related linear mapping Kthat is the main
+component to defining the GIT-Net transformation.
+1. Assume that each coordinate of the input function f: Ω→RCis decomposed on a common
+basis of functions {bk}k≥1withbk: Ω→R. In other words, each coordinate fcof the function
+f= (f1,...,fC)is expressed as
+fc(x) =/summationdisplay
+k≥1αc,kbk(x) (4)
+4for coefficients αc,k∈R. Note that it is different from expanding the function fon a basis of
+RC-valued functions. In contrast, the GIT-Net approach proceeds by expanding each coordinate
+fc: Ω→Ron a common basis of real-valued functions.
+2. A linear change of coordinates is implemented. The expansion on the basis of functions {bk}k≥1is
+transformed into an expansion onto another basis of functions {ˇbk}k≥1with ˇbk: Ω→R. Heuris-
+tically, this can be thought of as the equivalent of expressing everything on a Fourier basis, i.e. a
+Fourier transform. We have
+fc(x) =/summationdisplay
+k≥1ˇαc,kˇbk(x) (5)
+for coefficients ˇαc,k∈R. Continuing the analogy with Fourier expansions, the coefficients {ˇαc,k}k≥1
+represent the Fourier-spectrum of the function fc: Ω→R. The mapping α∝⇕⊣√∫⊔≀→ˇαis linear.
+3. The main assumption of the GIT-Net transform is that the different frequencies do not interact with
+each other. In the degenerate case C= 1, this corresponds to an operator that is diagonalized in
+the Fourier-like basis {ˇbk}k≥1. The function g=Kfwithg= (g1,...,gC)is defined as
+gc(x) =/summationdisplay
+k≥1ˇβc,kˇbk(x)where ˇβc,k=C/summationdisplay
+d=1Dd,c,kˇαd,k (6)
+for coefficients Dd,c,k∈R. The coefficients Dd,c,kfor1≤c,d≤Candk≥1represent the linear
+mapping ˇα∝⇕⊣√∫⊔≀→ˇβ. Crucially, for each frequency index k≥1, the frequencies {ˇβc,k}C
+c=1are linear
+combinations of the frequencies {ˇαc,k}C
+c=1only.
+4. As a final step, a last change of coordinates is performed. Heuristically, this can be thought of as the
+equivalent of implementing an inverse Fourier transform in order to come back to the original basis.
+More generally, the proposed approach only assumes a linear change of coordinates and expresses
+all the quantities in a final basis of functions {/hatwidebk}k≥1with/hatwidebk: Ω→R. The basis{/hatwidebk}k≥1is not
+assumed to be the same as the original basis {bk}k≥1. We have
+gc(x) =/summationdisplay
+k≥1βc,k/hatwidebk(x) (7)
+for coefficients βc,k∈R. The mapping ˇβ∝⇕⊣√∫⊔≀→βis linear.
+The operations described above, when expressed in finite bases of size K≥1instead of infinite expansions,
+can be summarized as follows. The input function f: Ω→RCis represented as α≡[αc,k]∈RC,Kwhen the
+coordinate functions are expanded on the finite basis {bk}K
+k=1. After the change of basis {bk}K
+k=1∝⇕⊣√∫⊔≀→{ˇbk}K
+k=1,
+the function is represented as ˇα≡[ˇαc,k]∈RC,K. This linear change of basis can be implemented by the
+right-multiplication by a matrix P∈RK,Kso that ˇα=αP. To succinctly describe the next operation, we
+use the notation ⊗to denote the frequency-wise operation defined in Equation (6). For ˇα∈RC,Kand a
+tensor D= [Dd,c,k]∈RC,C,K, the operation ˇβ=ˇα⊗Dwith ˇβ∈RC,Kis defined as
+ˇβc,k=C/summationdisplay
+d=1Dd,c,kˇαd,k.
+for any 1≤c≤Cand1≤k≤K. Finaly, the last change of basis {ˇbk}K
+k=1∝⇕⊣√∫⊔≀→ {/hatwidebk}K
+k=1can be be
+implemented by the right-multiplication by a matrix Q∈RK,K. The composition of these three (linear)
+operations, namely β=Kαwith
+Kα≡((αP)⊗D)Q, (8)
+5is a generalization of the non-local operator introduced in Li et al. (2021). For clarity, we have used the same
+notationKto denote the functional mapping g=Kfand the corresponding discretization β=Kαwhen
+expressed on finite bases. Note that the set of such generalized non-local operators is parametrized by a set
+of(2K2+KC2)parameters while the vector space of all linear transformations from RC,Konto itself has
+dimension (KC)2. The (nonlinear) GIT-Net mapping is defined as
+G(α) =σ(Tα+Kα) (9)
+for a matrix T∈RC,Cand a non-linear activation function σ:R→Rapplied component-wise. The
+numerical experiments presented in Section 5 use the GELU nonlinearity (Hendrycks & Gimpel, 2016)
+although other choices are certainly possible. Introducing the term Tαdoes not make the transformation
+more expressive when compared to only using the transformation α∝⇕⊣√∫⊔≀→σ(Kα)since it is possible to define
+/tildewideKα≡((α/tildewideP)⊗/tildewideD)/tildewideQfor another set of parameters (/tildewideP,/tildewideD,/tildewideQ)so that G(α) =σ(/tildewideKα). Nevertheless, we have
+empirically observed that the over-parametrization defined in Equation (9) eases the optimization process
+and helps the model reach higher predictive accuracies. It is worth emphasizing that the GIT-Net mapping,
+as described in Section 2.2, does not attempt to learn the basis functions bkandˇbkand/hatwidebk.
+2.2 GIT-Net: Generalized Integral Transform Neural Network
+This section describes the full GIT-Net architecture whose main component is the GIT mapping described
+in Equation (9). Recall that we are given a training set of pairs of functions {(fi,gi)}Ntrain
+i=1wheregi=F(fi)
+for some unknown operator F:U →Vwithfi: Ωu→Rdinandgi: Ωv→Rdout. The purpose of the
+GIT-Net architecture is to approximate the unknown operator F.
+In order to transform this infinite dimensional regression problem into a finite one, we assume a set of
+functions (eu,1,...,eu,Pu)witheu,i: Ωu→R, as well as a set of functions (ev,1,...,ev,Pv)withev,i:
+Ωv→R. This allows one to define the approximation operator Au:U→Rdin,Pusuch that, for a function
+f= (f1,...,fdin), we have
+fc≈Pu/summationdisplay
+k=1αc,keu,kfor 1≤c≤din
+and coefficents α∈Rdin,Pugiven byα=Au(f); the approximation operator Av:V→Rdout,Pvis defined
+similarly. For completeness, we define the operator Pu:Rdin,Pu→Uthat sendsα∈Rdin,Puto the function
+(f1,...,fdin) =f=Pu(α)defined asfc=/summationtextN
+k=1αc,keu,k. The operatorPv:Rdout,Pv→Vis defined
+similarly and we have
+f≈Pu◦Au(f)andg≈Pv◦Av(g)
+for any functions f∈Uandg∈V. The mappingsPu◦AuandPv◦Avcan be thought of as simple and
+linear auto-encoders (Rumelhart et al., 1985); naturally, more sophisticated (eg. non-linear) representations
+can certainly be used although we have not explored that direction further. In all the applications presented
+in this text, we have used PCA orthonormal bases obtained from the finite training set of functions; the
+approximation operators AuandAvare the orthogonal projections of these PCA bases. Other standard
+finite dimensional approximations (eg. finite-element, dictionary learning, spectral methods) could have
+been used instead. Through these approximation operators, the infinite-dimensional regression problem is
+transformed into a finite-dimensional problem consisting in predicting Av[F(f)]∈Rdout,Pvfrom the input
+Av[f]∈Rdin,Pu.
+To leverage the GIT mapping (9), we consider a lifting operator Φ↑:Rdin,Pu→RC,Kthat mapsα∈Rdin,Pu
+toΦ↑(α)∈RC,Kwith a number of channel C≥1possibly significantly highter than din. Similarly, we
+6consider a projection operator Φ↓:RC,K→Rdout,Pv. In the numerical presented in Section 4 and 5, the
+lifting and projection operators were chosen as simple linear operators defined as
+Φ↑(α) =L↑αR↑and Φ↓(α) =L↓αR↓
+for (learnable) matrices L↑∈RC,d inandR↑∈RP,KandL↓∈Rdout,KandR↓∈RK,Pv. In our numerical
+experiments, we chose Pu=Pv=K, but that is not a requirement. The unknown operator F:U→Vis
+approximated by the GIT-Net neural network N:U→Vdefined as
+N≡ Pv◦Φ↓◦G(L)◦...◦G(1)
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Ltransformations◦Φ↑◦Au. (10)
+This neural architecture N:U→Vis defined by composing L≥1different GIT-Net layers (9), in which
+nonlinear activation function σis used in G(l)(l= 1,...,L−1)and identity function is used instead in
+the last layer G(L). The GIT-Net neural network first approximates each coordinate of the input function
+f= (f1,...,fdin)as a linear combination of Pu≥1functions (eu,1,...,eu,Pu)through the approximation
+operatorAu. The finite representation Au(f)∈Rdin,Puis then lifted to a higher dimensional space of dimen-
+sionRC,Kthankstotheliftingoperator Φ↑, beforegoingthrough L≥1nonlinearGITmappings(9). Finally,
+the representation is projected down to Rdout,Pvin order to reconstruct the output g=N(f)∈V. Each
+coordinate of the output function gis expressed as the linear combination of the function (ev,1,...,ev,Pv)
+through the operator Pv. As explained in Section 2, the learnable parameters are obtained by minimizing
+the empirical risk defined in Equation (1).
+3 PDE problems
+This section presents the PDE problems that are used to compare the performance of the proposed GIT-
+Net architecture with other baseline methods. The domains of these PDEs include both rectangular grids
+as well as more complex geometries. The numerical experiments include the Navier-Stokes equation, the
+Helmholtz equation, the advection equation, as well as the Darcy problem. The datasets for the Navier-
+Stokes, Helmholtz, and advection equations are identical to those used in the work of de Hoop et al. (2022).
+The dataset for the Darcy problem follows the setup described in the work of Lu et al. (2022).
+Navier-Stokes equation Following the setup of de Hoop et al. (2022), the incompressible Navier-Strokes
+equation is expressed in the vorticity-stream form on the two-dimensional periodic domain D= [0,2π]2. It
+reads as 
+
+/parenleftbigg∂ω
+∂t+ (v·∇)ω−ν∆ω/parenrightbigg
+(x,t) =f(x),(x,t)∈D×[0,T],
+ω=−∆ψ,/integraldisplay
+Dψ= 0, (x,t)∈D×[0,T],
+v= (∂ψ
+∂x2,−∂ψ
+∂x1), (x,t)∈D×[0,T],
+ω(x,0) =ω0(x), x∈D,(11)
+where the quantities f(x)andω(x,t)andv(x,t)represent the forcing, the vorticity field, and the velocity
+field, respectively. The viscosity νis fixed at 0.025and the final time is set to T= 10. In this study, we
+investigate the mapping f(x)∝⇕⊣√∫⊔≀→ω(x,·,T)forx∈D. The input function fis a sample from a Gaussian
+random fieldN(0,Γ), where the covariance operator is given by Γ = (−∆ + 9)−2and∆is the Laplacian
+operator on the domain D= [0,2π]2with periodic boundary conditions. The output function ω(·,T)is
+obtained by solving Equation (11) with the initial condition ω0(x). The initial condition ω0is generated
+from the same distribution as f. For solving this equation, the domain is discretized on a uniform 64×64.
+Further details can be found in de Hoop et al. (2022). The same training and testing sets as de Hoop et al.
+(2022) were used in the numerical experiments. Figure 1 illustrates a pair of input and output functions.
+7f
+0 2
+y0
+2x
+-0.015-0.01-0.00500.0050.01
+(, T)
+0 2
+y0
+2x
+-0.1-0.08-0.06-0.04-0.0200.020.040.060.08Figure 1: Navier-Stokes Equation (11). Left:input force f(x).Right:final vorticity field ω(x,T).
+Helmholtz equation Following the setup of de Hoop et al. (2022), Equation (12) describes the Helmholtz
+equation on the two-dimensional domain D= [0,1]2,
+
+
+/parenleftbigg
+−∆−ω2
+c2(x)/parenrightbigg
+u= 0,x∈D,
+∂u
+∂n(x) =uN(x), x∈B
+∂u
+∂n(x) = 0, x∈∂D\B(12)
+whereB={(x,1) :x∈[0,1]}⊂∂D. The quantity c(x)is the wavespeed field and the frequency is set
+toω= 103. The boundary condition is given by uNis1{0.35≤x1≤0.65}. We are interested in approximating
+the mapping c(x)∝⇕⊣√∫⊔≀→u(x). The wavespeed is defined as c(x) = 20 + tanh( ξ)where the quantity ξ:D→R
+is sampled from the Gaussian random field ξ∼N (0,Γ), where the covariance operator is given by Γ =
+(−∆+9)−2and∆is the Laplacian operator on the domain on Dwith the homogeneous Neumann boundary
+conditions. The solution u:D→Ris obtained by solving (12) using the finite element method on a
+uniform grid of size 101×101. Numerical experiments were implemented using a dataset identical to the
+one presented in de Hoop et al. (2022) for training and testing. Figure 2 shows an example of wavespeed
+c:D→Rand associated solution u:D→R.
+c
+0 0.5 1
+y0
+0.5
+1x
+19.719.7519.819.8519.919.952020.0520.120.1520.2
+u
+0 0.5 1
+y0
+0.5
+1x
+-0.03-0.02-0.0100.010.020.03
+Figure 2: Helmholtz Equation (12). Left: (input) wavespeed field c(x).Right: (output) solution u(x).
+Structural mechanics equation We consider a two-dimensional plane-stress elasticity problem (Slaugh-
+ter, 2012) on the rectangular domain D= [0,1]2\Hwith a round hole Hremoved in the center, as depicted
+8in Figure 3. It is defined as
+
+
+∇·σ= 0, x∈D,
+ε=1
+2(∇u+ (∇u)⊤),x∈D,
+σ=C:ε, x∈D,
+σ·n=b(x), x∈B,
+u(x) = 0, x∈∂D\B(13)
+for displacement vector u, Cauchy stress tensor σ, infinitesimal strain tensor ε, fourth-order stiffness tensor
+CandB≡{ (x,1) :x∈[0,1]}⊂∂D. The notation ’ :’ denotes the inner product between two second-
+order tensors (summation over repeated indices is implied). The Young’s modulus is set to 2×105and the
+Poisson’s ratio to 0.25. We are interested in approximating the mapping from the boundary condition to
+the von Mises stress field. The input boundary condition b(x)is sample from the Gaussian random field
+N(100,Γ)with covariance operator Γ = 4002(−∆ + 9)−1)where ∆is the Laplacian on the domain Dwith
+Neumann boundary conditions. Equation (13) is solved with the finite element method using a triangular
+mesh with 4072 nodes and 1944 elements. When implementing the FNO method that requires a uniform
+rectangular grid, the functions are interpolated to [0,1]2using a uniform grid of size 101×101. Figure 3
+shows an example of input and output.
+00.10.20.30.40.50.60.70.80.91
+x00.10.20.30.40.50.60.70.80.91y D
+0 0.2 0.4 0.6 0.8 1
+x-400-300-200-1000100200300b(x)Surface traction
+Figure 3: Structural mechanics Equation (13). Left to Right: discretization of the domain, surface traction
+onΩ; corresponding von Mises stress field.
+Advection equation Following the setup described in de Hoop et al. (2022), we consider the advection
+equation defined in the one-dimensional torus D= [0,1)≡R/Z,
+
+
+∂u
+∂t+c∂u
+∂x= 0,(x,t)∈D×(0,T],
+u(0,t) =u(1,t), t∈[0,T]
+u(x,0) =u0(x), x ∈D(14)
+with constant advection speed c= 1and periodic boundary conditions. The initial condition is set to
+u0= sign(ξ)where sign :R→{− 1,1}⊂Ris the sign function and ξ:D→Ris sampled from the Gaussian
+random field ξ∼N(0,Γ)with covariance operator Γ≡(−∆ + 9)−2where ∆is the Laplacian on the domain
+Dwith periodic boundaries. We are interested in approximating the mapping from initial condition u0(x)
+to solution u(x,T)at timeT= 0.5. We use a dataset identical to the one used in de Hoop et al. (2022) for
+training and testing. Figure 4 shows an example of input condition u0:D→Rand output solution u(x,T).
+90 0.5 1
+x-1-0.500.51u0
+0 0.5 1
+x-1-0.500.51u(, T)Figure 4: Advection Equation (14). Left: initial condition u0(x)Right: solutionu(x,T).
+Darcy problem Consider the two-dimensional Darcy flow defined in a triangular domain D⊂[0,1]2with
+a notch, as described in Lu et al. (2022) and as depicted in Figure 5. It reads
+−∇· (P(x)∇h(x)) =f,x∈D, (15)
+with constant permeability field P(x) = 0.1, pressure field h:D→Rand constant source term f=−1.
+The region of the notch is denoted by Ωand the condition h(x)|∂D∩∂Ω= 0is imposed. We are interested in
+approximating the mapping from the boundary condition h(x)|∂D\∂Ωto the internal pressure field h(x)|D.
+The input boundary conditions h(x)|∂D\∂Ωneed to be specified on the triangle ∂D\∂Ω. As in Lu et al.
+(2022), on each side of this triangle, the conditions are sampled from a one-dimensional centered Gaussian
+Process (GP) with RBF covariance kernel K(x,y) = exp[−(x−y)2/(2ℓ2)]with lengthscale ℓ= 0.2. The
+internal pressure field h(x)forx∈Dis obtained by solving Equation (15) using a triangular mesh with 2295
+nodes and 1082elements, as represented in Figure 5. Since the FNO method requires a uniform rectangular
+grid, functions are extrapolated to [0,1]2using a 101×101grid and linear interpolation when outside of
+D.The reader is referred to Lu et al. (2022) for details. Figure 5 shows an example of a boundary condition
+and associated internal pressure field.
+00.10.20.30.40.50.60.70.80.9 1
+x00.10.20.30.40.50.60.70.80.9yD
+0 0.2 0.4 0.6 0.8 1
+x-1-0.8-0.6-0.4-0.200.20.40.60.81b(x)Boundary
+Figure 5: Darcy problem (15) in a triangular domain with a notch. Left to right are discretization of the
+domainD; boundary condition h(x)|∂D/∂ Ω; corresponding internal pressure field h(x).
+4 Influence of the hyperparameters
+This section investigates the influence of the number of channels C≥1as well as the dimension K≥1
+when using the GIT-Net approach for solving PDE problems introduced in Section 3. The number L≥1
+of GIT layers is fixed at L= 3and we used C∈{2,4,8,16,32}andK∈{16,64,128,256,512}. The
+number of PCA basis functions is set by ensuring that 99.999%of the energy is preserved. If this number
+10of PCA basis functions is larger than P= 200, it is truncated at P= 200in order to prevent the model
+from becoming excessively large. For the Navier-Stokes equation, Helmholtz equation, structural mechanics
+equation, advection equation, and Darcy problem, the number of PCA basis functions used as input-output
+in the network are 200-200, 200-200, 28-200, 198-198, and 16-16, respectively. To evaluate the performance
+of the different methods, four training datasets of respective size Ntrain∈{2500,5000,10000,20000}were
+generated for training; the methods were evaluated on independent test sets. The GELU nonlinear activation
+function (Hendrycks & Gimpel, 2016) was used to implement the GIT-Net. Let N=Ntrain=Ntest. Figure
+6 reports the relative test error defined as
+Etest=1
+NtestNtest/summationdisplay
+i=1∥N(fi)−gi∥2
+∥gi∥2. (16)
+as a function of the size of the training set, as well as the number of channels C≥1and the dimension
+K≥1. In the small dataset regime Ntrain= 2500, there is overfitting for all PDE problems, with particularly
+severe overfitting in the Helmholtz equation and Darcy problem. In general, a smaller value of Cleads to
+more overfitting when increasing K, as seen in the cases of the advection and Helmholtz equation with
+Ntrain = 2500training data. As expected, overfitting as a function of the dimensional parameter K≥1
+is decreased as the size of the training size is increased. For the Navier-Stokes problem, the dimension K
+appears to play a more important role than the number of channels C. ForK= 16the relative test error
+is insensitive to the number of channels. It is only when K≥64that increasing the number of channels C
+helps to decrease the relative test errors. However, for the Darcy problem, the number of channels Cappears
+to play a more important role. The largest value of C, i.e.C= 32, corresponds to the smallest relative test
+error even for the smallest value of K, i.eK= 16.
+5 Comparison with existing neural network operators
+This section compares the GIT-Net architecture to three recently proposed baseline approaches: the PCA-
+Net architecture (Li et al., 2021; Bhattacharya et al., 2021; de Hoop et al., 2022), the POD-DeepONet
+architecture (Luetal.,2022)andtheFourierneuraloperator(FNO)approach (Lietal.,2021). Theseneural
+architectures are briefly summarized in Section 5.1 for completeness. Various hyperparameters were tested
+for each one of these methods and Section 5.2 reports the predictions corresponding to the hyperparameters
+with the smallest relative test errors. Additionally, in order to demonstrate the computational efficiency of
+the GIT-Net architecture, Section 5.2 compares the evaluation cost of these operators in terms of floating
+point operations.
+5.1 Neural architectures for operator learning
+This section briefly summarizes the PCA-Net architecture, the POD-DeepONet architecture as well as the
+Fourier neural operator (FNO) approach. These neural architectures have recently been proposed for ap-
+proximating infinite-dimensional operators. As described in Section 2, we consider two Hilbert spaces of
+functionsU=f: Ωu→RdinandV=g: Ωv→Rdout, defined on the input domain Ωuand output domain
+Ωv, respectively. We also consider a finite training dataset (fi,gi)Ntrain
+i=1of pairs of functions gi=F(fi). The
+unknown operator F:U→Vis to be approximated by a neural network N:U→Vtrained by empirical
+risk minimization, as described in Equation (1).
+PCA-Net: In order to construct the PCA-Net architecture, consider the eigen-decomposition of the em-
+pirical covariance operator of the training set of functions (fi)Ntrain
+i=1and(gi)Ntrain
+i=1. This allows one to
+consider a truncated orthonormal principal component analysis (PCA) basis (eu,1,...,eu,Nu)ofU, as well
+as a truncated PCA basis (ev,1,...,ev,Nv)ofV.
+The projection operator APCA :U → RNuonto the PCA basis is defined as APCA(f) =
+(⟨f,eu,1⟩,...,⟨f,eu,Nu⟩). Similarly, define the linear operator PPCA :RNv→VasPPCA(β) =β1ev,1+
+1110-310-210-1Navier-StrokesN = 2500 N = 5000 N = 10000 N = 20000
+10-210-1Helmholtz
+10-210-1Structural mechanics
+  0.10.2Advection
+16 64128256512
+Network width K10-410-3Darcy
+16 64128256512
+Network width K16 64128256512
+Network width K16 64128256512
+Network width KTest ErrorC = 2 C = 4 C = 8 C = 16 C = 32Figure 6: Relative test error as defined in Equation (16).
+...+βNvev,Nv. With these definitions, the PCA-Net architecture is defined as
+NPCA =PPCA◦MLP◦ A PCA (17)
+where MLP :RNu→RNvis a standard multilayer perceptron, i.e. a fully connected feedforward neural
+network, with L≥1layers. Because the PCA bases are fixed, the computational cost of the PCA-Net
+12architecture is independent of the discretization of the PDE. Furthermore, the PCA-Net method can readily
+be applied to PDE problems defined in irregular domains.
+POD-DeepONet: The DeepONet architecture (Lu et al., 2021) encodes the input function space in the
+branch network and the domain of output functions in the trunk network, respectively. Specifically, for an
+input function, f∈U, the branch network B:U→RPtakes the discretized input function fas input and
+outputs a vector B(f)∈RP. Fory∈Ωv, the trunk network T: Ωv→RP,douttakes the coordinates of
+the output function as input and outputs a vector T(y)∈RP,dout. The vanilla unstacked DeepONet is then
+defined as
+NDeepONet (f)(y) =P/summationdisplay
+i=1Bi(f)Ti(y) +b0=B(f)⊤T(y) +b0, (18)
+for a bias vector b0∈Rdout. The architecture of the branch network depends on the structure of the problem
+and is typically chosen as a CNN or an RNN or an MLP. The trunk network is typically a standard MLP.
+The POD-DeepONet architecture, an extension of the vanilla DeepONet, was proposed in Lu et al. (2022).
+The POD-DeepONet use precomputed proper orthogonal decomposition (POD) basis functions instead of a
+trunk net. It is defined as
+NPODD (f) =P/summationdisplay
+i=1Bi(f)ei+e0, (19)
+whereB:U → RPdenotes a standard branch net as used in the vanilla DeepOnet architecture and
+(e1,...,eP)areP≥1precomputed basis functions of Vthat are generated from training data and e0
+is the mean function. The experiments presented in Lu et al. (2022) suggest that the POD-DeepONet
+architecture outperforms the vanilla DeepONet architecture for a wide class of PDE problems.
+Fourier neural operator (FNO) For an input function f∈U, the FNO architecture (Li et al., 2021) is
+defined as
+NFNO(f) :=Q◦LL◦···L 1◦P(f). (20)
+The lift operator Pand projection operator Qare defined as
+P(f) =Pf+bP,andQ(fL) =QfL+bQ,
+with vectors bP∈RCandbQ∈Rdoutand matrices P∈RC,d inandQ∈Rdout,C. The Fourier layers
+L1,...,LLin Equation (20) are defined as
+fl(x) =Ll(fl−1)(x) =σ/parenleftbig
+Wl(fl−1(x)) +F−1(Rl·F(fl−1)) (x)/parenrightbig
+(21)
+for matrixWl∈RC,CandRl(s)∈CC×Cfor each frequency s. The notations FandF−1denote the
+Fourier transform and its inverse. In Equation (21), σdenotes a nonlinear activation function except in the
+last layerFLwhereσis the identity function.
+5.2 Performance comparisons
+In this section, we evaluate the performance of our proposed GIT-Net on the PDE problems introduced in
+Section 3 using the neural network operators introduced in Section 5.1.
+Following the setup of the Fourier Neural Operator (FNO) in de Hoop et al. (2022), we use 12Fourier
+modes and three Fourier Neural Layers ( L= 3in (20)), and test various values of the number of channels
+C∈{2,4,8,16,32}in (20). For the PCA-Net, as in de Hoop et al. (2022), we use four internal layers (4-layer
+MLP in (17)) and test different neural network widths K∈{16,64,128,256,512}. For the POD-DeepONet,
+following the recommendations of Lu et al. (2022), we use a two-dimensional convolutional neural network
+and fully connected layers as branch nets for the two-dimensional problems, and a fully connected network
+13as the branch net for one-dimensional problems. If the input of a two-dimensional PDE is a one-dimensional
+boundary condition, it is first expanded to two dimensions before being fed into the convolutional neural
+network. We test various pairs of the number of channels Cof the convolutional layers and the width of
+the fully connected layers K, including (C,K )∈{(2,16),(4,64),(8,128),(16,256),(32,512)}. The activation
+function used is the GELU function in FNO, and the RELU function in PCA-Net and POD-DeepONet.
+We used the above configurations to compare these neural network operators in terms of their test error,
+error profile, and evaluation cost. These metrics evaluate different aspects of the performances of these
+neural network operators.
+Test error In Figure 7, we compare the relative test errors defined in Equation (16) of the neural net-
+work operators for various PDE problems. For this comparison, we only show results corresponding to
+the hyperparameters (C,K )∈{(2,16),(4,64),(8,128),(16,256),(32,512)}for GIT-Net. In the large data
+regimeNtrain = 20000, GIT-Net consistently achieves the smallest test error for all tested PDE problems.
+Furthermore, the FNO and GIT-Net architecture outperform other methods for PDE problems defined on
+rectangular grids. For these simple geometries and in the small data regimes, FNO performs slightly bet-
+ter than GIT-Net, with a lower test error and less overfitting. However, FNO does not behave as well
+for more complex geometries. In the structural mechanics equation, FNO obtains similar test errors to
+POD-DeepONet and GIT-Net. For the Darcy problem, the test error of FNO is significantly larger than
+that of the other methods. The PCA-Net and POD-DeepONet architectures achieve similar test errors for
+problems defined on rectangular grids. In these cases, PCA-Net can be seen as a POD-DeepONet with a
+fully connected neural network as a branch net. However, for problems defined on more complex geometries,
+the PCA-Net performs better for the structural mechanics equation, but worse for the Darcy problem when
+compared to the POD-DeepONet. Note that when C= 1, the PCA-Net and GIT-Net architectures are
+equivalent. This remark is confirmed by Figure 7 which indicates that when C= 2andKis small (e.g. 16),
+the performance of the GIT-Net and PCA-Net are similar.
+Error profiles The predictions and error profiles produced by the neural network operators using the
+hyperparameters that minimize test errors and are trained on Ntrain = 20000 data samples are selectively
+shown and discussed in the following. The hyperparameters in question are Cfor POD-DeepONet, FNO,
+and GIT-Net, and Kfor PCA-Net, POD-DeepONet, and GIT-Net.
+Figure 8 shows the input and output functions, predicted output, and error profiles for the Navier-Stokes
+equation (11) in the cases with the median and largest test errors for each neural network operator. For the
+PCA-Net,K= 512was used, (C,K ) = (512,32)was used for the POD-DeepONet, C= 32was used for the
+FNO, and (C,K ) = (512,32)was used for the GIT-Net. Visually, these neural network operators predict
+the output well. From the error profiles of the median-error cases, it can be seen that FNO and GIT-Net
+achieve much smaller test errors than the other methods. Furthermore, the error profiles of the worst-error
+cases for FNO and GIT-Net have similar structures.
+For the Helmholtz Equation (12), Figure 9 shows the paired input and output functions, predicted outputs,
+and error profiles for the case with the median and largest test errors for each neural network operator.
+The parameter values used were K= 512for PCA-Net, (C,K ) = (256,16)for POD-DeepONet, C= 32for
+FNO,and (C,K ) = (32,512)forGIT-Net. Forthemedian-errorcase, FNOandGIT-Netshowedsignificantly
+better predictions, and their error profiles had similar structures in terms of intensity and magnitude. For
+the worst-error case, FNO and GIT-Net performed slightly better, and all neural network operators produced
+error profiles with similar structures.
+For the structural mechanics problem described in Equation (13), Figure 10 shows the paired input and
+output functions, predicted output, and error profiles for the case with the median and largest test errors for
+each neural network operator. In this figure, K= 256was used in the PCA-Net, (C,K ) = (32,512)was used
+in the POD-DeepONet, C= 32was used in the FNO, and (C,K ) = (32,512)was used in the GIT-Net. In
+the median-error case, the error profiles of the GIT-Net and POD-DeepONet have similar intensities, while
+1410-310-210-1Navier-StrokesPCA PODD FNO GIT
+10-210-1Helmholtz
+10-210-1Structural mechanics
+  0.1  0.2Advection
+1612851220488192
+Network width K10-310-2Darcy
+(2,16)(4,64)(8,128)(16,256)(32,512)
+Network channel-width (C,K)2481632
+Network channel C (2,16)(4,64)(8,128)(16,256)(32,512)
+Network channel-width (C,K)Test ErrorN = 2500 N = 5000 N = 10000 N = 20000Figure 7: Test error of neural network operators for all PDE problems.
+the error profile of the FNO exhibits more severe oscillation structures, particularly near the hole, which is
+likely due to the interpolation of triangular meshes onto rectangular meshes. In the worst-error case, the
+PCA-Net achieves the largest error, while the GIT-Net and POD-DeepONet achieve similar errors that are
+much better than those of the PCA-Net and POD-DeepONet. The error profiles of all methods show the
+15PCA
+InputPODD
+ FNO
+ GIT
+-0.0100.01
+Output
+-0.0500.05
+Prediction
+-0.0500.05
+Error
+10-910-710-510-3
+PCA
+InputPODD
+ FNO
+ GIT
+-0.0200.02
+Output
+-0.100.1
+Prediction
+-0.100.1
+Error
+10-710-510-3Figure 8: Input, output, and prediction of Navier-Stokes equation using the hyperparameters with the
+smallest test error when Ntrain =Ntest= 20000 for each neural network. Left: the case with median test
+error. Right: the case with the largest test error.
+PCA
+InputPODD
+ FNO
+ GIT
+19.92020.120.220.3
+Output
+-0.04-0.0200.020.04
+Prediction
+ -0.04-0.0200.020.04
+Error
+10-910-710-510-3
+PCA
+InputPODD
+ FNO
+ GIT
+19.82020.2
+Output
+-0.0500.05
+Prediction
+ -0.0500.05
+Error
+10-710-510-3
+Figure 9: Input, output, and prediction of Helmholtz equation using the hyperparameters with the smallest
+test error when Ntrain =Ntest= 20000 for each neural network. Left: the case with median test error.
+Right: the case with the largest test error.
+most violent oscillations near the top boundary, where the traction force is applied, leading to more complex
+changes in stress in the output space.
+Figure 11 shows the paired input and output functions, predicted output, and error profiles for the advection
+Equation (14) in the case with the median and largest test errors for each neural network operator. In this
+16Figure 10: Input, output, and prediction of structural mechanics equation using the hyperparameters with
+the smallest test error when Ntrain =Ntest= 20000 for each neural network. Left: the case with median
+test error. Right: the case with the largest test error.
+case, the following values were used: K= 256for PCA-Net, K= 256for POD-DeepONet, C= 16for FNO,
+and(C,K ) = (16,256)for GIT-Net. From the median-error case, it can be seen that all operators produce
+visually good predictions, including sharp jump points. In the case of the largest test error, GIT-Net is
+observed to predict jump points much more accurately than the other operators. This may be due to the
+fact that FNO is more inclined to fit smooth, low-frequency periodic functions, and thus its ability to fit the
+jump points of piecewise linear functions is limited by the number of Fourier modes used.
+-101InputPCA PODD FNO GIT
+-101Output
+-101Prediction
+0 0.5 110-410-2100Error
+0 0.5 10 0.5 10 0.5 1
+-101InputPCA PODD FNO GIT
+-101Output
+-101Prediction
+0 0.5 110-410-2100Error
+0 0.5 10 0.5 10 0.5 1
+Figure 11: Input, output, and prediction of advection equation using the hyperparameters with the smallest
+test error when Ntrain =Ntest= 20000 for each neural network. Left: the case with median test error.
+Right: the case with the largest test error.
+In the case of the Darcy problem, Figure 12 shows the paired input and output functions, predicted output,
+and the error profile for the cases with the median and largest test error for each neural network operator.
+In this figure, K= 64is used for the PCA-Net method, (C,K ) = (16,256)is used for the POD-DeepONet
+17method,C= 32is used for the FNO, and (C,K ) = (32,512)is used for the GIT-Net. In the median-error
+case, the PCA-Net and GIT-Net achieve better predictions than the other methods. The areas with large
+errors tend to be where the output values are large. In the case of the worst error, GIT-Net performs better
+than the other methods. Although the PCA-Net method obtains smaller test errors overall, it performs
+worse than the FNO method in the case of the worst error, which indicates that the test error variance of
+PCA-Net is larger than that of FNO and that FNO performs relatively more consistently. The error profile
+obtained by the FNO method shows severe oscillations, which is likely due to interpolation error, and the
+interval scale of these oscillations is small.
+Figure 12: Input, output, and prediction of Darcy problem using the hyperparameters with the smallest test
+error when Ntrain =Ntest= 20000 for each neural network. Left: the case with median test error. Right:
+the case with the largest test error.
+Evaluation cost The approximate PDE operators discussed in this text are especially useful in situations
+suchasBayesianInverseProblemswhenitisnecessarytorepeatedlycomputesolutionstoPDEs. Asaresult,
+their evaluation costs are an important consideration. In de Hoop et al. (2022), a cost analysis based on
+floating-point operations was provided. This analysis showed that, assuming the number of sampling points
+for the input and output functions is O(Np), the evaluation costs for PCA-Net and FNO scale as O(Np+K2)
+andO(CNplog(Np) +NpC2), respectively. The cost scaling of POD-DeepONet is O(NpC2+CKNp+Np)
+for two-dimensional problems and O(Np+K2)for one-dimensional problems. In contrast, the cost scaling
+of our proposed GIT-Net is O(Np+CK(C+K)). Figure 13 reports the evaluation costs as a function of
+the test errors for all of the neural network operators considered in this study and for four different amounts
+of training data.
+For the Navier-Stokes equation, GIT-Net and FNO achieve the best performance and similar test errors with
+similar evaluation costs when a sufficient amount of training data is used (e.g. Ntrain = 20000). However,
+whentheamountoftrainingdataissmall(e.g. Ntrain= 2500), GIT-Netexhibitsmorepronouncedoverfitting
+compared to FNO. PCA-Net and POD-DeepONet show even more severe overfitting in this regime. For the
+Helmholtz equation and structural mechanics problems, GIT-Net achieves much smaller test errors than the
+other methods at the same evaluation cost. For the advection equation, FNO can achieve smaller test errors
+than the other methods at low evaluation costs, but GIT-Net performs better as the cost increases. For the
+Darcy problem, FNO performs the worst, with the largest evaluation cost and largest error. Overall, FNO
+and GIT-Net outperform PCA-Net and POD-DeepONet on problems defined on rectangular grids and can
+1810-310-210-1Navier-StrokesN = 2500 N = 5000 N = 10000 N = 20000
+10-210-1Helmholtz
+10-210-1Structural mechanics
+  0.10.2AdvectionTest Error
+106108
+Evaluation cost10-310-2Darcy
+106108
+Evaluation cost106108
+Evaluation cost106108
+Evaluation costPCA PODD FNO GITFigure 13: Evaluation cost vs test error of all methods for all problems.
+achieve similar test errors. However, FNO exhibits less overfitting on the Navier-Stokes equation with a
+small amount of training data. GIT-Net achieves similar or better test errors than FNO at a similar or lower
+evaluation cost. For problems defined on complex geometries, the FNO architecture exhibits much larger
+test errors than the GIT-Net approach.
+196 Conclusion
+In this article, we introduce GIT-Net, a neural network operator for approximating partial differential equa-
+tion (PDE) operators. Our data-driven approach involves learning an integral transform of neural network
+type from paired input-output functions. GIT-Net is robust to mesh discretizations and can easily be im-
+plemented for PDE problems on complex geometries or when the input and output functions are defined on
+different domains.
+We demonstrate the effectiveness of GIT-Net on a variety of PDE problems with different dimensions and
+geometries. When compared to other recently proposed operator learning methods (i.e. PCA-Net, POD-
+DeepONet, and FNO), GIT-Net consistently achieves the lowest test error in the large data regime. For
+PDEs defined on rectangular grids, GIT-Net and FNO can achieve similar accuracies, although GIT-Net
+typically requires lower computational costs. On more complex geometries, our experiments suggest that
+FNO is not competitive compared to GIT-Net. In terms of scaling with respect to the number of sampling
+pointsNp, the complexity of FNO and GIT-Net are O(CNplog(Np) +NpC2)andO(Np+C2K+CK2),
+respectively. These results suggest that GIT-Net has favorable properties for learning PDE operators in a
+wide range of settings. In ongoing work, we are developing the theoretical framework for explaining these
+empirical observations.
+References
+Jonas Adler and Ozan Öktem. Solving ill-posed inverse problems using iterative deep neural networks.
+Inverse Problems , 33(12):124007, 2017.
+Leah Bar and Nir Sochen. Unsupervised deep learning algorithm for pde-based forward and inverse problems.
+arXiv preprint arXiv:1904.05417 , 2019.
+Klaus-Jürgen Bathe. Finite element method. Wiley encyclopedia of computer science and engineering , pp.
+1–12, 2007.
+Saakaar Bhatnagar, Yaser Afshar, Shaowu Pan, Karthik Duraisamy, and Shailendra Kaushik. Prediction of
+aerodynamic flow fields using convolutional neural networks. Computational Mechanics , 64(2):525–545,
+2019.
+Kaushik Bhattacharya, Bamdad Hosseini, Nikola B. Kovachki, and Andrew M. Stuart. Model reduction and
+neural networks for parametric PDEs. SMAI Journal of Computational Mathematics , 7:121–157, 2021.
+doi: 10.5802/smai-jcm.74.
+Jan Blechschmidt and Oliver G Ernst. Three ways to solve partial differential equations with neural net-
+works—a review. GAMM-Mitteilungen , 44(2):e202100006, 2021.
+James Bradbury, Roy Frostig, Peter Hawkins, Matthew James Johnson, Chris Leary, Dougal Maclaurin,
+George Necula, Adam Paszke, Jake VanderPlas, Skye Wanderman-Milne, and Qiao Zhang. JAX: compos-
+able transformations of Python+NumPy programs, 2018. URL http://github.com/google/jax .
+François Chollet. Xception: Deep learning with depthwise separable convolutions. In Proceedings of the
+IEEE conference on computer vision and pattern recognition , pp. 1251–1258, 2017.
+Ingrid Daubechies, Ronald DeVore, Simon Foucart, Boris Hanin, and Guergana Petrova. Nonlinear approx-
+imation and (deep) relu networks. Constructive Approximation , 55(1):127–172, 2022.
+Maarten de Hoop, Daniel Zhengyu Huang, Elizabeth Qian, and Andrew M. Stuart. The cost-accuracy trade-
+off in operator learning with neural networks. Journal of Machine Learning , 1(3):299–341, 2022. ISSN
+2790-2048. doi: https://doi.org/10.4208/jml.220509. URL http://global-sci.org/intro/article_
+detail/jml/21030.html .
+20Weinan E and Bing Yu. The deep ritz method: a deep learning-based numerical algorithm for solving
+variational problems. Communications in Mathematics and Statistics , 6(1):1–12, 2018.
+Weinan E, Chao Ma, and Lei Wu. Barron spaces and the compositional function spaces for neural network
+models.arXiv preprint arXiv:1906.08039 , 2019.
+Tarek A El Moselhy and Youssef M Marzouk. Bayesian inference with optimal maps. Journal of Computa-
+tional Physics , 231(23):7815–7850, 2012.
+Robert Eymard, Thierry Gallouët, and Raphaèle Herbin. Finite volume methods. Handbook of numerical
+analysis, 7:713–1018, 2000.
+Xiaoxiao Guo, Wei Li, and Francesco Iorio. Convolutional neural networks for steady flow approximation. In
+Proceedings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining ,
+pp. 481–490, 2016.
+Juncai He, Lin Li, Jinchao Xu, and Chunyue Zheng. Relu deep neural networks and linear finite elements.
+Journal of Computational Mathematic , 38(3):502–527, 2020.
+Dan Hendrycks and Kevin Gimpel. Bridging nonlinearities and stochastic regularizers with gaussian error
+linear units. CoRR, abs/1606.08415, 2016. URL http://arxiv.org/abs/1606.08415 .
+Jan S Hesthaven and Stefano Ubbiali. Non-intrusive reduced order modeling of nonlinear problems using
+neural networks. Journal of Computational Physics , 363:55–78, 2018.
+Xiang Huang, Zhanhong Ye, Hongsheng Liu, Beiji Shi, Zidong Wang, Kang Yang, Yang Li, Bingya Weng,
+Min Wang, Haotian Chu, Fan Yu, Bei Hua, Lei Chen, and Bin Dong. Meta-auto-decoder for solving
+parametric partial differential equations. arXiv preprint arXiv:2111.08823 , 2021.
+George Em Karniadakis, Ioannis G Kevrekidis, Lu Lu, Paris Perdikaris, Sifan Wang, and Liu Yang. Physics-
+informed machine learning. Nature Reviews Physics , 3(6):422–440, 2021.
+Yuehaw Khoo, Jianfeng Lu, and Lexing Ying. Solving parametric pde problems with artificial neural net-
+works.European Journal of Applied Mathematics , 32(3):421–435, 2021.
+Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In Yoshua Bengio and
+Yann LeCun (eds.), 3rd International Conference on Learning Representations, ICLR 2015, San Diego,
+CA, USA, May 7-9, 2015, Conference Track Proceedings , 2015. URL http://arxiv.org/abs/1412.6980 .
+Nikola Kovachki, Samuel Lanthaler, and Siddhartha Mishra. On universal approximation and error bounds
+for fourier neural operators. Journal of Machine Learning Research , 22:Art–No, 2021.
+Zongyi Li, Nikola Borislavov Kovachki, Kamyar Azizzadenesheli, Burigede liu, Kaushik Bhattacharya, An-
+drewStuart, andAnimaAnandkumar. Fourierneuraloperatorforparametricpartialdifferentialequations.
+InInternational Conference on Learning Representations , 2021. URL https://openreview.net/forum?
+id=c8P9NQVtmnO .
+TadeuszLiszkaandJanuszOrkisz. Thefinitedifferencemethodatarbitraryirregulargridsanditsapplication
+in applied mechanics. Computers & Structures , 11(1-2):83–95, 1980.
+Zichao Long, Yiping Lu, Xianzhong Ma, and Bin Dong. Pde-net: Learning pdes from data. In International
+Conference on Machine Learning , pp. 3208–3216. PMLR, 2018.
+Zichao Long, Yiping Lu, and Bin Dong. Pde-net 2.0: Learning pdes from data with a numeric-symbolic
+hybrid deep network. Journal of Computational Physics , 399:108925, 2019.
+21Lu Lu, Pengzhan Jin, Guofei Pang, Zhongqiang Zhang, and George Em Karniadakis. Learning nonlinear
+operators via DeepONet based on the universal approximation theorem of operators. Nature Machine
+Intelligence , 3(3):218–229, 2021. ISSN 25225839. doi: 10.1038/s42256-021-00302-5.
+Lu Lu, Xuhui Meng, Shengze Cai, Zhiping Mao, Somdatta Goswami, Zhongqiang Zhang, and George Em
+Karniadakis. A comprehensive and fair comparison of two neural operators (with practical extensions)
+based on fair data. Computer Methods in Applied Mechanics and Engineering , 393:114778, 2022.
+Shaowu Pan and Karthik Duraisamy. Physics-informed probabilistic learning of linear embeddings of non-
+linear dynamics with guaranteed stability. SIAM Journal on Applied Dynamical Systems , 19(1):480–509,
+2020.
+Adam Paszke, Sam Gross, Soumith Chintala, Gregory Chanan, Edward Yang, Zachary DeVito, Zeming Lin,
+Alban Desmaison, Luca Antiga, and Adam Lerer. Automatic differentiation in pytorch. 2017.
+Maziar Raissi, Paris Perdikaris, and George E Karniadakis. Physics-informed neural networks: A deep learn-
+ing framework for solving forward and inverse problems involving nonlinear partial differential equations.
+Journal of Computational physics , 378:686–707, 2019.
+David E Rumelhart, Geoffrey E Hinton, and Ronald J Williams. Learning internal representations by error
+propagation. Technical report, California Univ San Diego La Jolla Inst for Cognitive Science, 1985.
+Yeonjong Shin, Jerome Darbon, and George Em Karniadakis. On the convergence of physics informed neural
+networks for linear second-order elliptic and parabolic type pdes. Communications in Computational
+Physics, 28(5):2042–2074, 2020. ISSN 1991-7120. doi: https://doi.org/10.4208/cicp.OA-2020-0193. URL
+http://global-sci.org/intro/article_detail/cicp/18404.html .
+Justin Sirignano and Konstantinos Spiliopoulos. DGM: A deep learning algorithm for solving partial differ-
+ential equations. Journal of computational physics , 375:1339–1364, 2018.
+William S Slaughter. The linearized theory of elasticity . Springer Science & Business Media, 2012.
+Jonathan D Smith, Kamyar Azizzadenesheli, and Zachary E Ross. Eikonet: Solving the eikonal equation
+with deep neural networks. IEEE Transactions on Geoscience and Remote Sensing , 59(12):10685–10696,
+2020.
+Ralph C Smith. Uncertainty quantification: theory, implementation, and applications , volume 12. Siam,
+2013.
+Andrew M Stuart. Inverse problems: a bayesian perspective. Acta numerica , 19:451–559, 2010.
+Fredi Tröltzsch. Optimal control of partial differential equations: theory, methods, and applications , volume
+112. American Mathematical Soc., 2010.
+Yaohua Zang, Gang Bao, Xiaojing Ye, and Haomin Zhou. Weak adversarial networks for high-dimensional
+partial differential equations. Journal of Computational Physics , 411:109409, 2020.
+Yinhao Zhu and Nicholas Zabaras. Bayesian deep convolutional encoder–decoder networks for surrogate
+modeling and uncertainty quantification. Journal of Computational Physics , 366:415–447, 2018.
+22

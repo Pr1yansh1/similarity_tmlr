@@ -1,0 +1,1531 @@
+Published in Transactions on Machine Learning Research (06/2022)
+Boosting Search Engines with Interactive Agents
+Leonard Adolphs†∗leonard.adolphs@inf.ethz.ch
+Benjamin Boerschinger‡bboerschinger@google.com
+Christian Buck‡cbuck@google.com
+Michelle Chen Huebscher‡michellechen@google.com
+Massimiliano Ciaramita‡massi@google.com
+Lasse Espeholt‡lespeholt@google.com
+Thomas Hofmann†thomas.hofmann@inf.ethz.ch
+Yannic Kilcher†∗yannic.kilcher@inf.ethz.ch
+Sascha Rothe‡rothe@google.com
+Pier Giuseppe Sessa†∗sessap@ethz.ch
+Lierni Sestorain Saralegui‡lierni@google.com
+†ETH, Zurich‡Google Research
+Reviewed on OpenReview: https: // openreview. net/ forum? id= 0ZbPmmB61g
+Abstract
+This paper presents ﬁrst successful steps in designing search agents that learn meta-strategies
+for iterative query reﬁnement in information-seeking tasks. Our approach uses machine
+reading to guide the selection of reﬁnement terms from aggregated search results. Agents
+are then empowered with simple but eﬀective search operators to exert ﬁne-grained and
+transparent control over queries and search results. We develop a novel way of generating
+synthetic search sessions, which leverages the power of transformer-based language models
+through (self-)supervised learning. We also present a reinforcement learning agent with
+dynamically constrained actions that learns interactive search strategies from scratch. Our
+search agents obtain retrieval and answer quality performance comparable to recent neural
+methods, using only a traditional term-based BM25 ranking function and interpretable
+discrete reranking and ﬁltering actions.
+1 Introduction
+Can machines learn to use a search engine as an interactive tool for ﬁnding information? Web search
+is the portal to a vast ecosystem of general and specialized knowledge, designed to support humans in
+their eﬀort to seek relevant information and make well-informed decisions. Utilizing search as a tool is
+intuitive, and most users quickly learn interactive search strategies characterized by sequential reasoning,
+exploration, and synthesis (Hearst, 2009; Rutter et al., 2015; Russell, 2019). The success of web search relies
+on machines learning human notions of relevance, but also on the users’ ability to (re-)formulate appropriate
+∗Work carried out in part during internships at Google.
+1Published in Transactions on Machine Learning Research (06/2022)
+queries, grounded in a tacit understanding of strengths and limitations of search engines. Given recent
+breakthroughs in language models (LM) (Vaswani et al., 2017; Devlin et al., 2019; Brown et al., 2020) as
+well as in reinforcement learning (RL) (Mnih et al., 2013; Silver et al., 2016; Berner et al., 2019), it seems
+timely to ask whether, andhow, agents can be trained to interactively use search engines. However, the lack
+of expert search sessions puts supervised learning out of reach, and RL is often ineﬀective in complex natural
+language understanding (NLU) tasks. The feasibility of autonomous search agents hence remains an open
+question, which inspires our research.
+We pursue a design philosophy in which search agents operate in structured action spaces deﬁned as generative
+grammars, resulting in compositional, productive, and semantically transparent policies. Further domain
+knowledge is included through the use of well-known models and algorithms from NLU and information
+retrieval (IR). Most notably, we develop a self-supervised learning scheme for generating high-quality search
+session data, by exploiting insights from relevance feedback (Rocchio, 1971), used to train a supervised LM
+searchagentbasedonT5(Raﬀeletal.,2020). WealsobuildanRLsearchagentbasedonMuZero(Schrittwieser
+et al., 2020) and BERT (Devlin et al., 2019), which performs planning via rule-constrained Monte Carlo tree
+search and a learned dynamics model.
+We run experiments on an open-domain question answering task, OpenQA (Lee et al., 2019). Search
+agents learn diverse policies leading to deep, eﬀective explorations of the search results. The MuZero agent
+outperforms a BM25 (Robertson & Zaragoza, 2009) search function running over a Wikipedia index, on both
+retrieval and answer quality metrics. This result provides novel evidence for the potential of knowledge-infused
+RL in hard NLU tasks. The T5 agent can more easily leverage large pre-trained encoder-decoders and proves
+superior to MuZero. Furthermore, a straightforward ensemble of agents is comparable in performance to the
+current reference neural retrieval system, DPR (Karpukhin et al., 2020), while relying solely on interpretable,
+symbolic retrieval operations. This suggests new challenges for future work; e.g., involving hybrid architectures
+and policy synthesis. We open-source the code and trained checkpoints for both agents.1,2
+2 Learning to Search
+It has been a powerful vision for more than 20 years to design search engines that are intuitive and simple to
+use. Despite their remarkable success, search engines are not perfect and may not yield the most relevant
+result(s) in one shot. This is particularly true for rare and intrinsically diﬃcult queries, which may require
+interactive exploration by the user to be answered correctly and exhaustively.
+It can be diﬃcult for users to formulate eﬀective queries because of the information gap that triggers the
+search process in the ﬁrst place (Belkin et al., 1982). O’Day & Jeﬀries (1993) found that reusing search results
+content for further search and exploration is a systematic behavior (aka “orienteering”), a key ingredient for
+solving the information need. Lau & Horvitz (1999) analyzed a dataset of one million queries from the logs of
+the Excite search engine and report an average session length of 3.27 queries per informational goal. Teevan
+et al. (2004) noticed that users facing hard queries can even decide to partially by-pass the search engine by
+issuing a more general query and then navigating the links within the returned documents to ﬁnd an answer.
+Downey et al. (2008) observed that a user’s initial query is typically either too speciﬁc or too general and the
+amount of work required to optimize it depends on the query frequency, with infrequent queries requiring
+longer search sessions. They estimate from logs that tail information needs require more than 4 queries, while
+common ones require less than 2 (on average). Contextual query reﬁnement is a common technique (Jansen
+et al., 2009), even among children (Rutter et al., 2015), used to improve search by combining evidence from
+previous results and background knowledge (Huang & Efthimiadis, 2009). Such reﬁnements often rely on
+inspecting result snippets and titles or on skimming the content of top-ranked documents. This process is
+iterative and may be repeated until (optimistically) a satisfactory answer is found.
+It seems natural to envision artiﬁcial search agents that mimic this interactive process by learning the basic
+step of generating a follow-up query from previous queries and their search results while keeping track of the
+best results found along the way. We call this the learning to search problem.
+1https://github.com/google-research/google-research/tree/master/muzero
+2https://github.com/google-research/language/tree/master/language/search_agents
+2Published in Transactions on Machine Learning Research (06/2022)
+2.1 Search Engine and Query Operations
+We make the assumption that agents interact with a search engine operating on an inverted index architec-
+ture (Croft et al., 2009, §2.2), which is popular in commercial engines and IR research. Speciﬁcally, we use
+Lucene’s implementation3as the search engine, in combination with the BM25 ranking function (Robertson
+& Zaragoza, 2009). We frame search as the process of generating a sequence of queries q0,q1,...,qT,4where
+q0is the initial query, and qTis the ﬁnal query – where the process stops. Each query qtis submitted to the
+search engine to retrieve a list of ranked documents Dt.
+We focus on the case where qt+1is obtained from qtthrough augmentation . A query may be reﬁned by
+adding a keyword w∈Σidx, such that qt+1=qtw, where Σidxis the vocabulary of terms in the search index.
+The new term will be interpreted with the usual disjunctive search engine semantics. Furthermore, a query
+can be augmented by means of search operators . We concentrate on three unary operators: ‘+’, which limits
+results to documents that contain a speciﬁc term, ‘-’ which excludes results that contain the term, and ‘ ∧i’
+which boosts a term weight in the BM25 score computation by a factor i∈R. In addition, the operator eﬀect
+is limited to a speciﬁc document ﬁeld, either the content or the title. As an example, the query ’who is the
+green guy from sesame street’ could be augmented with the term ’+contents:muppet’, which would limit the
+results returned to documents containing the term ’muppet’ in the body of the document.
+Only a small fraction of users’ queries include search operators, and this behavior is not well studied. Croft
+et al. (2009, §6.2) estimate that less than 0.5% use ‘+’. However, it is noteworthy how power users can leverage
+dedicated search operators, in combination with sophisticated investigative strategies, to solve deep search
+puzzles (Russell, 2019). Additionally, unary operators are associated with explicit, transparent semantics and
+their eﬀect can be analyzed and interpreted. Crucially, however, as we show in this paper, these operators
+are also pivotal in designing eﬀective search agents because they allow us to generate self-supervised search
+session training data in a principled fashion.
+2.2 Results Aggregation and Observations Structure
+Web searchers expect the best answer to be among the top few hits on the ﬁrst results page (Hearst, 2009,
+§5) and pay marginal attention to the bottom half of the 10 blue links (Granka et al., 2004; Joachims et al.,
+2005; Nielsen & Pernice, 2009; Strzelecki, 2020). Likewise, a search agent considers only the top kdocuments
+returned by the search engine at every step; we set k= 5in all our experiments.
+During a search session the agent maintains a list of the top- kdocuments overall, which is returned at the end
+as the output. To aggregate the results from diﬀerent steps during the search session we use a Passage Scorer
+(PS) which builds upon a pre-trained BERT model. For each result document d∈Dt, the PS component
+estimates the probability of dcontaining the (unspeciﬁed) answer P(d/owneranswer|q)∈[0; 1]. This probability
+can be viewed as a score that induces a calibrated ranking across all result documents within a session. Notice
+that the score is always computed conditioning on the original query q=q0and notqt.
+At each session step a search agent computes a structured observation representing the state of the session
+up to that point. The observation includes the query tokens and reﬁnements describing qt. The top- k
+documents in the session are represented by their title and a text snippet. The snippet is a ﬁxed-length
+token sequence centered around the text span that contains the most likely answer for q, as predicted by a
+Machine Reader (MR) (Rajpurkar et al., 2016). For ranking (PS) and answer span prediction (MR) tasks we
+use the same BERT system as in (Karpukhin et al., 2020). Query and aggregated results yield a segmented
+observation token sequence otwhich is truncated to length ≤512, a common input length for pre-trained
+transformer-based LMs (cf. Appendix B for more details and examples).
+3https://lucene.apache.org/ .
+4We also refer to the query sequence as a session, or search episode.
+5The answer is ‘‘Oscar the Grouch” who is a green muppetthat lives in a trashcan on Sesame street.
+3Published in Transactions on Machine Learning Research (06/2022)
+Figure 1: Schematic agent interaction with the search engine (BM25) for the query “who is the green guy
+from sesame street”.5This is a real example from the query expansion procedure described in Section 2.3,
+see also Table A.9 for an expanded version. After receiving an initial set of documents ( D0) for the original
+question, the corresponding observation ( o0) is compiled by ranking the documents according to their Passage
+Score (PS), and creating snippets for the top- kdocuments around the answers extracted by the Machine
+Reader (MR). Note that PS/MR always conditions on q0. The ﬁrst action of the agent is to enforce the term
+“muppet” to be in the content of the search results. The new document set D1is returned by the search engine
+and aggregated with the previous documents. Again, the set of documents is ranked by the Passage Scorer,
+and the subsequent observation for the agent is compiled. The agent then chooses to enforce the presence of
+the topical term “trash” and obtains another set of documents that are, again, aggregated and scored. The
+ﬁnal resultDcontains the top- kdocuments observed during the episode, according to the Passage Score.
+The next step involves a language model which produces an embedding stfrom which the search agent will
+generate the next query. We can represent diagrammatically the operations that lead to a query reﬁnement as
+
+q0,...,qt
+search↓engine
+D0,...,Dt
+MR/PS/mapsto−→ot/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+observationLM/mapsto−→ st/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+encodingagent/mapsto−→qt+1/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+generation(1)
+At each step tthe top-kdocuments in the session are identiﬁed by means of their PS score. An observation
+otis computed for the top documents by means of a machine reader (MR). Then the search agent’s LM
+encodes the observation otand decodes the next query qt+1. Figure 1 illustrates the search agent and its
+components at work with an example.
+2.3 Rocchio Query Expansions and Rocchio Sessions
+The query operations introduced above allow us to generate synthetic search sessions in a self-supervised
+manner, making use of question-answer pairs (q,a). We initialize q0=qand aim to ﬁnd a sequence of
+reﬁnements that make progress towards identifying high-quality documents, based on a designed scoring
+function which combines retrieval and question answering performance (cf. Eq. 7, introduced in §4). A query
+isnotfurther reﬁned if no score increasing reﬁnement can be found or a maximal length is reached.
+To create candidate reﬁnements, we put to use the insights behind relevance feedback as suggested in Rocchio
+(1971). Formalizing the query operations introduced in Section 2.1, an elementary reﬁnement – called a
+Rocchio expansion – takes the form
+qt+1:=qt∆qt,∆qt:= [+|−|∧iTitle|Content ]wt,wt∈Σt:= Σq
+t∪Στ
+t∪Σα
+t∪Σβ
+t (2)
+whereiis the boosting coeﬃcient and Σtrefers to a set of terms accessible to the agent. By that we mean
+terms that occur in the observation ot– the search state at time t. We use superscripts to refer to the
+vocabularies induced from the observation which identify the terms occurring in the question ( q), titles (τ),
+4Published in Transactions on Machine Learning Research (06/2022)
+Table 1: An observed example Rocchio session for the question “who won season 2 great british baking show”.
+The colored span is the answer span prediction of the machine reader, indicating if the answer is wrong (red)
+or correct (blue). The top BM25 retrieval results for the original query are passages from the articles about
+“The Great American Baking Show” – the American version of the show mentioned in the query. The reason
+for this confusion is that the British show is called “The Great British Bake Oﬀ ”, while the query term
+“baking” matches the title of the wrong document. The ﬁrst Rocchio expansion booststhe term “ﬁnal”, i.e.,
+puts more weight on this term while computing the relevance score. This is a reasonable choice as the terms
+is likely related to the culmination of a periodic event, such as a seasonal show. In the two subsequent steps
+the procedure requires the terms “bake” and “2” to be contained in the title of the retrieved documents.
+In this way the results ﬁrst continue to shift from the American Baking Show to the British Bake Oﬀ, and
+eventually settle on the desired British Bake Oﬀ (series 2). The composite IR and QA score (deﬁned in Eq.7)
+increases from 0.040 for the original query to 0.552 for the ﬁnal query.
+Query and Search Results Score
+q0who won season 2 great british baking show
+Top-2 documents retrieved with q0: 0.040
+d1Title The Great American Baking Show
+Content ...The ﬁrst two seasons were hosted by Nia Vardalos and Ian Gomez, with Mary Berry
+from the original "GBBO" series and ...
+d2Title The Great American Baking Show (season 3)
+Content ..., ABC announced that Vallery Lomas won the competition, beating out runners-up
+Cindy Maliniak and Molly Brodak in the ﬁnalweek ...
+q1who won season 2 great british baking show (contents:“ﬁnal” ∧8)
+Top-2 documents retrieved with q1: 0.142
+d1Title The Great British Bake Oﬀ
+Content ...The ﬁnalists were Brendan Lynch, James Morton and John Whaite , the last of
+whom won the ﬁnal in a surprise result. ...
+d2Title The Great American Baking Show (season 2)
+Content ...In the ﬁnal technical, Mary Berry set the challenge on the bakers to create a British
+Battenberg cake with a checkerboard ...
+q2who won season 2 great british baking show (contents:“ﬁnal” ∧8) +(title:“bake”)
+Top-2 documents retrieved with q2: 0.186
+d1Title The Great British Bake Oﬀ
+Content ...The ﬁnalists were Brendan Lynch, James Morton and John Whaite , the last of
+whom won the ﬁnal in a surprise result. ...
+d2Title The Great British Bake Oﬀ
+Content ...The ﬁnal of the series where John Whaite was crowned the winner saw its highest
+...
+q3who won season 2 great british baking show (contents:“ﬁnal” ∧8) +(title:“bake”) +(title:“2”)
+Top-2 documents retrieved with q3: 0.552
+d1Title The Great British Bake Oﬀ (series 2)
+Content ...The competition was won by Joanne Wheatley . There was no Star Baker this
+week, as Paul and Mary felt ...
+d2Title The Great British Bake Oﬀ (series 2)
+Content ...contestants went on to a career in baking or have a change of career as a result of
+appearing on the show. Joanne Wheatley has written two best selling books on baking
+...
+5Published in Transactions on Machine Learning Research (06/2022)
+predicted answer spans ( α) or bodies ( β) of documents in ot. Note that adding terms /negationslash∈Σtwould make
+reﬁnements more diﬃcult to reproduce for an agent and thus would provide supervision of low utility.
+A crucial aspect of creating search sessions training data based on Rocchio expansions has to do with the
+search complexity of ﬁnding optimal sequences of such expansions. The success of this search relies on the
+notion of relevance feedback. We introduce q∗=q+aas the “ideal” query: query qexecuted on the subset
+of documents that contain answer a. The results of q∗deﬁne the vocabulary Σ∗. We can now deﬁne two
+special dictionaries that will allow us to narrow down the candidate terms to appear in the next reﬁnement
+Σ↑
+t= Σt∩Σ∗,Σ↓
+t= Σt−Σ∗. (3)
+During the search for an optimal session, it is possible to use accessible terms wtas additional keywords,
+or in combination with exact match (‘+’), or weight boosting (‘ ∧’), if they also occur in the ideal result
+set (wt∈Σ↑
+t); and to exclude wt(‘-’) if they are not present in the ideal results ( wt∈Σ↓
+t). As in Rocchio
+algorithm, this is meant to bring the query closer to the relevant documents and farther away from the
+irrelevant ones. We have found experimentally that this leads to a good trade-oﬀ between the quality of
+Rocchio expansions and the search eﬀort to ﬁnd them. We call a sequence of Rocchio expansions a Rocchio
+session. Table 1 illustrates a Rocchio session for the query ’who won season 2 great british baking show’,
+based on the experimental setup described in Section 5.
+The search for Rocchio sessions is done heuristically. Full implementation details with pseudo-code illustrating
+the procedure and examples can be found in §5, Appendix A, and Appendix G – cf. also Table A.10.
+3 Search Agents
+3.1 Self-Supervised T5 Agent
+It is straightforward to train a generative search agent in a supervised manner on the Rocchio sessions. We
+use T5, a popular pretrained transformer encoder-decoder model. As a search agent, T5 learns to predict a
+new search expansion from each observed state. In the spirit of everything-is-string-prediction , state and
+expansions are represented as plain strings. See Appendix B for a full example.
+Our T5 agent is trained via Behavioral Cloning (BC) (Michie, 1990). We treat each step in a Rocchio session
+as a single training example. As is common in sequence prediction tasks, we use the cross-entropy loss for
+optimization. BC is perhaps the simplest form of Imitation Learning (IL), and has been proven eﬀective
+in a variety of application domains (Sharma et al., 2018; Rodríguez-Hernandez et al., 2019). In our query
+reﬁnement task, it allows to inherit the expressive power of the Rocchio query expansions and, diﬀerently
+from other IL approaches (Ross et al., 2011; Ho & Ermon, 2016; Dong et al., 2020), requires only oﬄine
+interactions with the search engine. Crucially, this enables scaling to the large action spaces and model
+sizes typical of recent LMs. Our T5 agent can also be described as a Decision Transformer with ﬁxed max
+return (Chen et al., 2021).
+3.2 Reinforcement Learning: MuZero Agent
+Learning to search lends itself naturally to be modeled as a reinforcement learning problem. To explore
+also the feasibility of learning search policies from scratch, we implement an RL search agent based on
+MuZero (Schrittwieser et al., 2020). MuZero is a state-of-the-art agent characterized by a learnable model of
+the environment dynamics. This allows the use of Monte Carlo tree search (MCTS) to predict the next action,
+in the absence of an explicit simulator. In our use case, MuZero aims to anticipate the latent state implied by
+each action with regard to the results obtained by the search engine. For instance, in the example of Figure 1,
+it may learn to predict the eﬀect of using the term ’muppet’ in combination with a unary operator. This
+approach to planning is intuitive for search, as searchers learn to anticipate the eﬀect of query reﬁnements
+while not being able to predict speciﬁc results. Furthermore, this oﬀers a performance advantage of many
+orders of magnitude against executing queries with the realsearch engine.
+6Published in Transactions on Machine Learning Research (06/2022)
+3.2.1 Grammar-Guided Search
+To map observations to states, the MuZero agent employs a custom BERT with dedicated embedding layers
+to represent the diﬀerent parts (cf. Appendix B for details). Compared to T5, MuZero has a more challenging
+starting point: its BERT-based representation function is pre-trained on less data, it has fewer parameters
+(110M vs. 11B) and no cross-attention: predictions are conditioned on a single vector, [CLS]. Moreover, it
+cannot as easily exploit supervised signals. However, it can more openly explore the space of policies, e.g.
+independent of the Rocchio expansions. Through many design iterations, we have identiﬁed it to be crucial
+to structure the action space of the MuZero agent and constrain admissible actions and reﬁnement terms
+dynamically based on context. This provides a domain-informed inductive bias that increases the statistical
+eﬃciency of learning a policy via RL.
+We take inspiration from generative, speciﬁcally context-free, grammars (CFGs) (Chomsky, 1956) and
+encode the structured action space as a set of production rules, which will be selected in (ﬁxed) top-down,
+left-to-right order. A query reﬁnement is generated, in a way that mimics Rocchio expansions, as follows
+Q⇒UQ|WQ, U⇒Op FieldW,Op⇒+|−|∧i,Field⇒TITLE|CONTENT (4)
+which allows for adding plain or structured keywords using unary operators. The selection of each reﬁnement
+termWproceeds in three steps, the ﬁrst two can be described by the rules
+W⇒Wq
+t|Wτ
+t|Wβ
+t|Wα
+t|Widx, Wx
+t⇒w∈Σx
+τ, x∈{q,τ,β,α}, Widx⇒w∈Σidx(5)
+which means that the agent ﬁrst decides on the origin of the reﬁnement term, i.e., the query or the diﬀerent
+parts of the top-scored result documents, and afterwards selects the term from the corresponding vocabulary.
+As the term origin correlates strongly with its usefulness as a reﬁnement term, this allows to narrow down
+the action space eﬀectively. The agent is forced to pick a term from the larger vocabulary (approximately 1M
+terms) of the search index Σidxduring MCTS, as there is no observable context to constrain the vocabulary.
+The third level in the action hierarchy concerns the selection of the terms. We have found it advantageous to
+make use of subword units; speciﬁcally, BERT’s 30k lexical rules involving word pieces, to generate terms
+sequentially, starting from a term preﬁx and adding one or more suﬃxes. Note that this part of the generation
+is context-sensitive, as we restrict node expansions to words present in the vocabulary. We make use of tries
+to eﬃciently represent each Σx
+τand amortize computation. The grammar-guided MCTS is explained in more
+detail in Appendix F.
+4 The OpenQA Environment
+We evaluate search agents in the context of open-domain question answering (Open-QA) (Voorhees, 2000;
+Chen et al., 2017). Given a question q, we seek documents Dthat contain the answer ausing a search engine,
+the environment. Following common practice, we use Lucene-BM25 with default settings on the English
+Wikipedia. BM25 has provided the reference probabilistic IR benchmark for decades (Robertson & Zaragoza,
+2009), only recently outperformed by neural models (Lee et al., 2019). The Lucene system provides search
+operators comparable to commercial search engines.
+Exploration-based learning is vulnerable to discovering adversarial behaviors. As a safeguard we design a com-
+posite reward. The score of a results set D, givenq, interpolates three components. The ﬁrst is the Normalized
+Discounted Cumulative Gain (NDCG) at k. See Eq. 6a, where wi=log2(i+ 1)−1//summationtextk
+j=1log2(j+ 1)−1are
+normalizing weights, and rel(d|q) = 1, ifa∈d,0otherwise:
+a) NDCGk(D|q) =k/summationdisplay
+i=1wirel(di|q), b ) NDCEM k(D|q) =k/summationdisplay
+i=1wiem(di|q). (6)
+NDCG is a popular metric in IR as it accounts for rank position, it is comparable across queries, and it is
+eﬀective at discriminating ranking functions (Wang et al., 2013). NDCG alone can have drawbacks: on “easy”
+questions a score of 1can be achieved in short meritless episodes, while on “hard” ones it may be impossible to
+7Published in Transactions on Machine Learning Research (06/2022)
+(a) Rocchio sessions’ length
+ (b) Score gain at each search step
+Figure 2: The histogram on the left shows the length of the Rocchio sessions, using diﬀerent grammars on
+NQ Dev. The plot on the right shows the average score gain (score is computed according to Eq. 7) for each
+Rocchio expansion step with grammar G4 on NQ Dev. Shaded area is between 5−95thpercentiles.
+ﬁnd a ﬁrst valid step, since Eq. 6a takes discrete values. Hence, we introduce a second component, NDCEMk
+(Eq. 6b) where em(d|q) = 1if the answer extracted from dby the reader exactly matches a,0otherwise.
+NDCEMkhelps validate results by promoting high-ranking passages yielding correct answer spans. Finally,
+to favour high-conﬁdence result sets we add the normalized Passage Score of the top kresults, leading to the
+following scoring function
+Sk(D|q) := (1−λ1−λ2)·NDCGk(D|q) +λ2·NDCEMk(D|q) +λ1·1
+kk/summationdisplay
+i=1PS(di|q)∈[0,1](7)
+Based on (7), we deﬁne the search step reward
+rt= S5(Dt|q0)−S5(Dt−1|q0). (8)
+We train the MuZero agent directly on the reward. The reward is sparse, as none is issued in between search
+steps. The T5 agent is trained indirectly on the reward via the induction of Rocchio sessions (cf. §2.3).
+5 Experiments
+For our experiments we use the OpenQA-NQ dataset (Lee et al., 2019). This data is derived from Natural
+Questions (Kwiatkowski et al., 2019) and consists of Google queries paired with answers extracted from
+Wikipedia by human annotators. The data includes 79,168 train questions, 8,757 dev questions and 3,610
+for test. We use the provided partitions and Wikipedia dump. Following Lee et al. (2019) we pre-process
+Wikipedia into blocks of 288 tokens, for a total of 13M passages. We evaluate each system on the top-5
+288-token passages returned. Model selection and data analysis are performed on NQ Dev, using the reward
+(Eq. 8) as the objective.
+5.1 Rocchio Sessions Data
+We generate synthetic search sessions using Rocchio expansions for 5 diﬀerent combinations of types of
+reﬁnements. We refer to these as grammars :G0(allows only simple terms), G1(only term boosting, with
+weighti∈{0.1,2,4,6,8}),G2(‘+’ and ‘-’), G3(G0+G2) and G4(G0+G1+G2). Given the original query, a
+Rocchio session is generated as follows: We attempt at most M= 100possible reﬁnements for each grammar
+operator using terms from the constructed dictionaries Σ↑
+tandΣ↓
+t(see Eq. 3). For instance, for the ‘+’
+operator we attempt reﬁnements of the form ‘+( ﬁeld: “term”)’, where termis taken from the top- Mterms
+in the intersection dictionary Σ↑
+tandﬁeldrepresents the ﬁeld (content or title) where such term was found.
+Dictionaries Σ↑
+tandΣ↓
+tare constructed (cf. §2.3) based on the set Σtof topN= 100terms present in the
+8Published in Transactions on Machine Learning Research (06/2022)
+documents retrieved so far, sorted according to Lucene’s IDF score. For each of such possible reﬁnements we
+issue the corresponding query to Lucene and, based on the returned documents, we evaluate the resulting
+score. We use the scoring function of Eq. 7 with coeﬃcients λ1=0.2,λ2=0.6, after a search against the ﬁnal
+quality metrics (cf. Appendix C). Then, we select the reﬁnement leading to the highest score and neglect
+the other ones. This process continues until no score-improving reﬁnement can be found, for a maximum
+of 20 reﬁnement steps. A more formal description of the Rocchio session search procedure is summarized
+in Algorithm 1 in Appendix A, while examples of such sessions are reported in Table 1, Table A.9 and
+Table A.10.
+In Figure 2a, we plot the histogram of the length of Rocchio sessions on NQ Dev, using the diﬀerent grammars.
+We observe that most sessions terminate after a number of steps signiﬁcantly smaller than 20, either because
+the maximum score is reached or because no score improvements can be found. For instance, using the G4
+grammar, Rocchio sessions have an average length of 5.06 steps with standard deviation 3.28. Results are
+similar on NQ Train, where with grammar G4 we obtain 298,654 single Rocchio expansion steps from 77,492
+questions (in Table A.1 we report the numbers for diﬀerent grammars). Moreover, we have observed the
+ﬁrst query expansion steps produce higher score gains with respect to later ones. This can be observed in
+Figure 2b where we plot the average per-step score’s gain. This indicates that performing longer Rocchio
+expansions yields diminishing marginal gains.
+5.2 Agents Training and Inference
+The machine reader and passage scorer, as well as MuZero’s hθfunction, use 12-layer BERT systems.6To
+train the former, we generate for each query in NQ Train 200candidate passages from our BM25 system,
+picking one positive and 23negative passages for each query at random whenever the query is encountered
+during training. The reader/scorer is not trained further. MuZero’s representation function is trained jointly
+with the rest of the MuZero system.
+For the T5 agent we start from the pretrained T5-11B (11 billion parameters) public checkpoint and continue
+training on the NQ Train Rocchio expansions. Training took about 5 days using 16 Cloud TPU v3. At
+inference time, we found that ﬁxing the sessions to 20 steps worked best for both T5 and MuZero. Indeed,
+we observed performance increase monotonically with the search steps, with decreasing marginal gains (see
+Figure 4 where we plot the NQ Dev performance of one of our T5 agents as well as the supervised Rocchio
+sessions, as a function of the number of reﬁnement steps). We report detailed training conﬁgurations and
+ablations in Appendix D.
+The MuZero implementation is scaled and distributed via an agent-learner setup (Espeholt et al., 2018) in the
+SEED RL (Espeholt et al., 2020) framework allowing for centralized batching of inference for eﬀective use of
+accelerators. MuZero is trained on NQ Train for a total of 1.6 million steps ( ≈10 days) using 500 CPU-based
+actors and 4 Cloud TPU v2 for inference and training on the learner.7For each step, 100 simulations are
+performed. During training, we limit sessions to a maximum of 20 steps. The agent also can decide to stop
+early by selecting a dedicated stop action. Training of MuZero can be improved by providing adviceto the
+actors. An actor may receive information about which terms wtshould be promoted, wt∈Σ↑
+t, or demoted,
+wt∈Σ↓
+t. The probability of an episode receiving advice starts at 0.5and decays linearly to 0 in one million
+steps.
+5.3 Results
+Table 2 summarizes the results on OpenQA-NQ Test. We evaluate passage retrieval quality by means of
+ranking (NDCG@5) and precision (Top-1, Top-5) metrics. We also report Exact Match (EM) to evaluate
+answer quality. The baseline is Lucene’s BM25 one-shot search. Reranking the same BM25 documents
+by the PS score (BM25+PS) is easy and improves performance on all metrics, particularly noticeable on
+Top-1 and EM.8We also evaluate a pseudo relevance feedback variant of the BM25+PS baseline (+RM3).
+Following (Jaleel et al., 2004; Pal et al., 2013), at each iteration we pick the highest scoring term in the
+6BERT-base, initialized from https://tfhub.dev/google/bert_uncased_L-12_H-768_A-12/1 .
+7For details, see https://cloud.google.com/tpu.
+8Top-5 is identical to BM25 since the documents are the same.
+9Published in Transactions on Machine Learning Research (06/2022)
+Table 2: Results on the test partition of OpenQA-NQ. The BM25column reports the performance of
+the Lucene-BM25 search engine. BM25+PS refers to reranking the top-5 BM25 results with the BERT
+passage scorer (PS). BM25+PS+RM3 is a pseudo-relevance feedback baseline that iteratively adds
+terms to the query and uses the passage scorer (PS) to aggregate the retrieved results. MuZero is the
+performance of the RL search agent using the full set of query expansion types (G4). T5-G1is the best
+T5 search agent, trained on the G1 grammar Rocchio sessions (using only term boosting). MuZero+T5s
+is an ensemble of the documents returned by the MuZero agent and all T5 agents, ranked based on each
+document PS score. For DPR’s performance ( DPR) we report the most recent Top-1 and Top-5 results from
+https://github.com/facebookresearch/DPR . Finally,Rocchio-G4 is an estimate of the headroom based
+on the Rocchio sessions using the full grammar (G4). NDCG@5 ,Top-1andTop-5are retrieval quality
+metrics, while EM(Exact Match) is the answer quality metric used in machine reading.
+Metric BM25 +PS +RM3 MuZero T5-G1 MuZero+T5s DPR Rocchio-G4
+NDCG@5 21.51 24.82 26.99 32.23 44.27 46.22 - 65.24
+Top-1 28.67 44.93 46.13 47.97 52.60 54.29 52.47 73.74
+Top-5 53.76 53.76 56.33 59.97 66.59 71.05 72.24 88.17
+EM 28.53 41.14 40.14 32.60 44.04 44.35 41.50 62.35
+search results based on the RM3 score, and add that term to the previous query with the ’+’ operator
+applied to the document content. In Appendix E.1 we provide a detailed study of the retrieval performance
+of this method, using all available operators, and comparing with an alternative IDF-based term selection
+mechanism. Surprisingly, and somewhat against the general intuition behind pseudo relevance feedback, we
+ﬁnd that negating terms is more eﬀective than promoting them. This seems to suggest that negative pseudo
+relevance feedback, in combination with reranking (e.g., by the PS score), can provide a simple and useful
+exploration device.
+The last column (Rocchio-G4) reports the quality metrics for the best Rocchio sessions data, using the
+grammar with all operators (G4). Rocchio expansions make use of the gold answer and thus can be seen
+as a, possibly conservative, estimate of the performance upper bound. As the external benchmark we use
+DPR (Karpukhin et al., 2020), a popular neural retriever based on dual encoders, the dominant architecture
+for deep learning-based ad hoc retrieval (Craswell et al., 2020).
+T5We evaluate T5 models trained on all 5 grammar variants. The best one, ‘T5-G1’ in Table 2, is limited
+to term boosting (G1), and it learns to use all available weight values (Figure 3a). In terms of Top-1 this
+agent outperforms the published and the most recently posted DPR results9but has worse Top-5 than both.
+Results for all ﬁve T5 agents are found in Table A.6, we notice that the performance varies by relatively small
+amounts using diﬀerent grammars, but it peaks noticeably with ’T5-G1’. Figure 4 shows the performance
+of the best Rocchio sessions data (Rocchio-G4) and that of the best T5 model (G1) as a function of the
+maximum number of steps allowed, both increasing monotonically as expected.
+MuZero On the retrieval task the MuZero agent outperforms all BM25 variants. While this result may
+seem trivial, it marked a milestone that required many iterations to achieve. The challenge for RL in IR, and
+NLU, is extreme in terms of state and action space dimensionality, data sparsity etc. (Zhang et al., 2021).
+Our ideas for tackling some of these key challenges by ﬁtting out agents with domain knowledge in principled
+ways, with the grammar-guided MCTS as the centerpiece, seem to point in a promising direction. MuZero
+converges to a policy which uses only term boost action types with a weight of 2 – see Figure 3a for the
+action distributions of diﬀerent policies. The MuZero agent is not able to ﬁnd better-performing, diverse
+policies. This is an extreme case of a more general pattern. Diﬀerent sub-grammars represent diﬀerent tactics;
+e.g., ‘+’ and ‘-’ aﬀect the accessible documents in irreversible ways, while boosting only aﬀects ranking. It is
+challenging for all agents, and particularly MuZero, to modulate eﬀectively multiple sub-policies.
+9https://github.com/facebookresearch/DPR .
+10Published in Transactions on Machine Learning Research (06/2022)
++contents
++title
+-contents
+-title
+contents^0.1
+contents^2.0
+contents^4.0
+contents^6.0
+contents^8.0
+or0.00.20.40.60.81.0Relative FrequencyMuZero
+T5-G1
+Rocchio-G4
+(a) Distribution of action types.
+1 - 56 - 5051 - 100101 - 250 251 - 500501 - 1000> 10000.00.10.20.30.4Frequency in Top-5 DocsMuZero
+T5-G1
+Rocchio-G4 (b) Depth of documents explored.
+Figure 3: The plot on the left shows the relative frequency of action types chosen by the best versions of the
+MuZero RL agent, the T5 agent that is learned on supervised episodes with the G1 grammar (only term
+boosting) ’T5-G1’, and the Rocchio sessions with grammar G4 (complete grammar consisting of action types:
+simple terms, term boosting, ‘+’, and ‘-’) ’Rocchio-G4’. Interestingly, the MuZero agent converges to only
+use the ‘light’ boosting operation with a weight of 2. The T5 agent, on the other hand, makes use of the
+whole spectrum of the boosting operations, including the boosting with 0.1, which down-weights a particular
+term. The Rocchio query expansion uses the ‘+’ operator on the contents ﬁeld most often. This can be seen
+as an eﬀective but potentially dangerous operation as it is a hard ﬁltering on the presence of a certain term,
+potentially reducing the resulting retrieval set drastically. The right plot shows the depth of the documents
+in terms of retrieval rank based on the original query explored by the three agents. Here, we see that for all
+three agents, a signiﬁcant portion of documents are retrieved beyond rank 1000, which means that they ﬁnd
+relevant documents entirely hidden from a system relying on BM25 with only the original query.
+(a) Rocchio-G4 supervised episodes
+ (b) T5-G1 episodes
+Figure 4: Performance on NQ Dev as a function of the number of query reﬁnement steps. The plot on the left
+shows the results for the performance of the supervised Rocchio sessions with grammar G4 (all operators),
+while on the right we plot the performance of the trained T5-G1 agent trained on the G1 Rocchio sessions.
+Agents Ensemble In the last experiment we combine all trained agents, the ﬁve T5 agents and MuZero,
+in one ensemble. We simply rank the union of all the documents returned by the ensemble, by means of the
+PS score on each document, thus not requiring any additional parameters. This ensemble (‘MuZero+T5s’ in
+Table 2) has slightly better precision than the recent DPR in top position, and slightly worse for the Top-5.
+This results indicates that the ability to orchestrate diverse sub-policies may indeed be the key to future
+progress for search agents. For the record, the current SOTA for Top-5 is 74.0 (Qu et al., 2021).
+11Published in Transactions on Machine Learning Research (06/2022)
+Table 3: Example of a T5-G4 agent session exhibiting multiple tactics. The session shows the evolution of
+the search query (ﬁrst line in each section) and snippets of the top-3 retrieved documents from the search
+engine. We skip q1andq2for brevity. The colored spans indicate the prediction of the machine reader; blue
+if it is correctly predicted, red otherwise. In the top right corner of each section, we report the score of the
+retrieved document set at that step, according to Equation 7.
+Query and Search Results Score
+q0who averaged the most points in college basketball history
+Top-3 documents retrieved with q0: 0.027
+d1Title Gary Hill (basketball)
+Content ...one of four on that team who averaged double ﬁgures in points. Senior Larry Jones
+was OCU’s leading scorer at 19.7 points a game, sophomore Bud Koper added 15.9...
+d2Title Kevin Foster (basketball)
+Content ...his senior year, Foster averaged 21 points per game and was named the MVP and
+All-District 18-5A First Team. He was also a Texas top- 30player his ﬁnal season ...
+d3Title Paul Cummins (basketball)
+Content ...big home win over Army. As a freshman, Cummins high-scored with 13points against
+ﬁnal-four team Louisville (2004). After graduating in 2008, Cummins played for ...
+q3who averaged the most points in college basketball history (contents:“per” ∧6)
+(contents:“scorer” ∧4) (contents:“3” ∧6)
+Top-3 documents retrieved with q3: 0.330
+d1Title Alphonso Ford
+Content ...seasons. With 3,165 career points scored in the NCAA Division I, he is 4th on the
+all-time scoring list, behind only Pete Maravich , Freeman Williams, and Lionel ...
+d2Title Buzzy Wilkinson
+Content Buzzy Wilkinson Richard Warren "Buzzy" Wilkinson (November 18, 1932 – January
+15, 2016) was an American basketball player who was selected by the Boston Celtics in
+...
+d3Title Gary Hill (basketball)
+Content ...becoming one of four on that team who averaged double ﬁgures in points. Senior
+Larry Jones was OCU’s leading scorer at 19.7 points a game, sophomore Bud Koper
+...
+q4who averaged the most points in college basketball history (contents:“per” ∧6)
+(contents:“scorer” ∧4) (contents:“3” ∧6) +(contents:“maravich”)
+Top-3 documents retrieved with q4: 0.784
+d1Title Alphonso Ford
+Content ...seasons. With 3,165 career points scored in the NCAA Division I, he is 4th on the
+all-time scoring list, behind only Pete Maravich , Freeman Williams, and Lionel ...
+d2Title Pete Maravich
+Content ...had posted a 3–20 record in the season prior to his arrival. Pete Maravich ﬁnished
+his college career in the 1970 National Invitation Tournament, where LSU ﬁnished fourth
+...
+d3Title 1970 National Invitation Tournament
+Content ...represented the ﬁnal college games for LSU great Pete Maravich , the NCAA’s
+all-time leading scorer. Maravich ﬁnished his three-year career with 3,667 points ...
+Answer Quality We conclude by discussing answer quality. Agents routinely produce answer spans, as
+predicted by the reader/scorer, to build observations. The MR/PS component is trained once, before the
+agents, on the output of BM25. However, agents deeply aﬀect the results composition. As Figure 3b shows,
+search agents dig deep in the original BM25 ranking. This is positive, as behavior discovery is one of the main
+motivations for researching exploratory methods like RL. As a consequence, though, the MR/PS component
+eﬀectively operates out of distribution and the EM numbers of the internal reader are not competitive with
+12Published in Transactions on Machine Learning Research (06/2022)
+recent methods, Table A.7 reports all the numbers including on NQ Dev. Ideally, one would co-train the
+observation builder with the search agent. However, combining the two would introduce signiﬁcant engineering
+complexity in the current architecture. For instance, one could interleave training the two as in DQNs (Mnih
+et al., 2013).
+A simpler alternative is to add the answer prediction task to the T5 agent. Retrieval-augmented answer
+generation is known to produce strong results (Izacard & Grave, 2021). Multitasking would simplify the
+design of the generative agents and possibly produce better models. We make a ﬁrst step in this direction by
+training a dedicated T5 agent. The system uses as training input the top-5 documents of the Rocchio-G4
+episodes, but its task is to generate the gold answer, instead of the query expansion. At evaluation time,
+based on the output of the ‘T5-G1’ and ‘MZ+T5s’ agents, the EM performance of the answer generation T5
+is comparable to methods that build on DPR, such as RAG (Lewis et al., 2020b) (44.5 EM). Although not as
+good as FID (Izacard & Grave, 2021) that condition on many more (100) documents.
+5.4 Discussion
+Limitations of Current Policies Table 3 illustrates an example where the T5-G4 agent (with the full
+set of operators) switches policy mid-session. The question is about basketball records and BM25 does not
+ﬁnd good results. In the ﬁrst three steps the agent focuses on re-ranking by boosting terms like ‘per’ (from
+the phrase ‘per game’ in the results for q0) and ‘scorer’. This produces a good hit and predicted answer span
+(‘Pete Maravich’) at position 1 of step 3. The agent then switches to ﬁltering mode, to focus on documents
+containing the answer term predicted by the machine reader. While this is a clear instance of successful policy
+synthesis, the T5-G4 agent does not master switching between policies well enough to perform better than
+T5-G1, the agent that only uses boost operators. Table 4 provides an example that shows how T5-G1 is more
+robust than T5-G4. T5-G4 starts by requiring the presence of a misspelled term (‘highschool’) which leads to
+empty results and the end of the session because that step is not reversible. T5-G1, instead, makes its way
+gradually in the session boosting topical terms (‘draftees’) and players names eventually solving the query.
+The agents ensemble results prove that the ability to orchestrate complementary sub-policies provides a
+performance advantage. This suggests that the action space may beneﬁt by including more control actions,
+e.g. to ’undo’ or ’go back’ to a speciﬁc state, to better support safe exploration and the emergence of meta
+policies. We plan to investigate this in future work. The previous point extends to the agents’ architecture.
+It is reasonable to hypothesise that the superior performance of T5 is due to two main factors. T5s are bigger
+models, trained on more data, and rely on a more powerful prediction process based on the encoder-decoder
+architecture. In addition, they are ﬁnetuned on a self-supervised task which provides signiﬁcant headroom.
+While large LMs seem the obvious choice forward there are open questions concerning exploration. It is not
+clear how much the model can generalize, being trained oﬄine and never being exposed to its own predictions.
+This moves the learning problem back towards RL. We have started to investigate approaches in the direction
+of decision/trajectory transformers (Chen et al., 2021; Janner et al., 2021). We believe they provide a natural
+framework for bringing back key RL concepts which could play an important role; for example, by allowing
+successful policy synthesis by training from diﬀerent oﬄine policies; e.g., from Rocchio and MuZero.
+Artiﬁcial vs Human Search Policies Based on human search behavior (cf. §2), it seems natural to
+model search as an iterative, contextualized machine learning process. In terms of the number of steps
+required, Rocchio sessions peak at around 5 steps, while also for humans, especially for hard queries, several
+step are often necessary. Qualitatively speaking, though, they look diﬀerent. For a start, while powerful,
+search operators (at least in the current form) don’t allow to easily capture the full spectrum of human
+search tactics. Human search sessions have been characterized broadly in terms of three types of reﬁnement
+actions: speciﬁcation, generalization and reformulation (Lau & Horvitz, 1999; Downey et al., 2008). In this
+respect the current current search agents lack the ability to explicitly generalize and fully reformulate. They
+mostly perform ﬁltering and reranking. Search operators may be better suited to complement, as power tools,
+other plain language query reﬁnement methods rather than being the centerpiece of the agent’s action space.
+Evaluating plain language reformulation functionality is thus an obvious next step. However, the generation
+of the necessary training data in this case is an open question. We will focus on this problem in future work.
+13Published in Transactions on Machine Learning Research (06/2022)
+We also point out that the policies that can be currently generated via the Rocchio sessions, or by exploration
+via Muzero, are artiﬁcial because they are driven by a reward which is an imperfect proxy for human relevance.
+In future work, we plan to investigate new learning methods that include modeling of human policies, e.g., in
+combination with apprenticeship learning frameworks (cf. (Nakano et al., 2021)).
+Thoughts on OpenQA-NQ The Natural Questions dataset (Kwiatkowski et al., 2019) is unique in that
+it builds from real user queries, with a great deal of attention to annotation and data quality. On the other
+hand, the dataset is designed for a setup where the document is given. Hence, annotations are consistent
+only within that document, not at the collection level. The retrieval setting implies that the vast majority of
+the data have not been validated by raters. Additionally, the human ratings cannot be easily and reliably
+aligned with a pre-computed segmentation into passages. Thus, one typically relies on the heuristic relevance
+function, based on the presence of the short answer string, which cannot discriminate unjustiﬁed answers.
+While imperfect, this setup strikes a local optimum that has driven signiﬁcant innovation in IR and QA
+research by allowing direct comparison of many diﬀerent approaches in a fast moving landscape; e.g. from
+ORQA (Lee et al., 2019) to closed book QA (Roberts et al., 2020) to RAG (Lewis et al., 2020b; Qu et al.,
+2021), DPR (Karpukhin et al., 2020) etc. Another possible downside is the overlap between partitions, as
+pointed out in (Lewis et al., 2021a). We controlled for this factor periodically by splitting the dev partition
+into known and unknown answers (based on the presence of the answer in the train data). Consistently
+with (Lewis et al., 2021a) we ﬁnd a signiﬁcant drop on the unknown answers but the same relative performance
+of methods.
+Broader Impact We would like to note that pre-trained language models of the kind used here have
+been shown to capture societal biases (Tan & Celis, 2019; Webster et al., 2020), which motivates a broad
+discussion about potential harms and mitigations (Blodgett et al., 2020; Bender et al., 2021). We have no
+reason to believe our architectures would exacerbate biases, but the overall problems may persist. We also
+hope that end-to-end optimization methods based on composite rewards, as in this proposal, can contribute
+to addressing some of these challenges; e.g., by providing means of adversarial testing, and by including
+relevant metrics directly in the objective design. We stress here that, while our agents yield performance
+comparable to neural retrievers, they rely solely on interpretable, transparent, symbolic retrieval operations.
+6 Related Work
+Query optimization is an established topic in IR. Methods range from hand-crafted rules (Lawrence & Giles,
+1998) to data-driven transformation patterns (Agichtein et al., 2001). Narasimhan et al. (2016) use RL to
+query the web for information extraction. Nogueira & Cho (2017) and Buck et al. (2018) use RL-trained
+agents to seek good answers by reformulating questions with seq2seq models. These methods are limited to
+one-step episodes and queries to plain natural language. This type of modeling is closely related to the use of
+RL for neural machine translation, whose robustness is currently debated (Choshen et al., 2020; Kiegeland
+& Kreutzer, 2021). Montazeralghaem et al. (2020) propose a feature-based network to score potential
+relevance feedback terms to expand a query. Das et al. (2019) propose to perform query reformulation in
+embedding (continuous) space and ﬁnd that it can outperform the sequence-based approach. Xiong et al.
+(2021) successfully use relevance feedback by jointly encoding the question and the text of its retrieved
+results for multi-hop QA. Other work at the intersection of IR and RL concerns bandit methods for news
+recommendation (Li et al., 2010) and learning to rank (Yue & Joachims, 2009). Recently, interest in Deep RL
+for IR has grown (Zhang et al., 2021). There, the search engine is the agent, and the user the environment.
+In contrast, we view the search problem from the user perspective and thus consider the search engine as the
+environment.
+The literature on searchers’ behavior is vast, see e.g. Strzelecki (2020) for an overview of eye-tracking studies.
+While behavior evolves with interfaces, users keep parsing results fast and frugally, attending to just a few
+items. From a similar angle, Yuan et al. (2020) oﬀer promising ﬁndings on training QA agents with RL
+for template-based information gathering and answering actions. Most of the work in language-related RL
+is otherwise centered on synthetic navigation/arcade environments (Hu et al., 2019). This line of research
+shows that RL for text reading can help transfer (Narasimhan et al., 2018) and generalization (Zhong et al.,
+14Published in Transactions on Machine Learning Research (06/2022)
+2020) in synthetic tasks but skirts the challenges of more realistic language-based problems. On the topic of
+grammars, Neu & Szepesvári (2009) show that Inverse RL can learn parsing algorithms in combination with
+PCFGs (Salomaa, 1969).
+Current work in OpenQA focuses on the search engine side of the task, typically using dense neural passage
+retrievers based on a dual encoder framework instead of BM25 (Lee et al., 2019; Karpukhin et al., 2020).
+Leveraging large pre-trained language models to encode the query and the paragraphs separately led to a
+performance boost across multiple datasets, not just in the retrieval metrics but also in exact-match score.
+While Karpukhin et al. (2020) use an extractive reader on the top-k returned paragraphs, Lewis et al. (2020b)
+further improves using a generative reader (BART (Lewis et al., 2020a)). This design combines the strengths
+of a parametric memory – the pre-trained LM – with a non-parametric memory – the retrieved Wikipedia
+passages supplied into the reader’s context. This idea of combining a dense retriever with a generative reader
+is further reﬁned in Izacard & Grave (2021), which fuses multiple documents in the decoding step. A recent
+line of work is concerned with constraining the model in terms of the number of parameters or retrieval
+corpus size while remaining close to state-of-the-art performance (Min et al., 2021). This eﬀort led to a
+synthetic dataset of 65 million probably asked questions (Lewis et al., 2021b) used to do a nearest neighbor
+search on the question – no learned parameters needed – or train a closed-book generative model.
+7 Conclusion
+Learning to search sets an aspiring goal for AI, touching on key challenges in NLU and ML, with far
+reaching consequences for making the world’s knowledge more accessible. Our paper provides the following
+contributions. First, we open up the area of search session research to supervised language modeling. Second,
+we provide evidence for the ability of RL to discover successful search policies in a task characterized by
+multi-step episodes, sparse rewards and a high-dimensional, compositional action space. Lastly, we show how
+the search process can be modeled via transparent, interpretable machine actions that build on principled
+and well-established results in IR and NLU.
+Our ﬁndings seem to agree with a long-standing tradition in psychology that argues against radical behaviorism
+– i.e., pure reinforcement-driven learning, from tabula rasa – for language (Chomsky, 1959). RL agents require
+a remarkable share of hard-wired domain knowledge. LM-based agents are easier to put to use, because
+they rely on massive pre-training and abundant task-speciﬁc data for ﬁne tuning. Supplied with the right
+inductive bias, LM and RL search agents prove surprisingly eﬀective. Diﬀerent architectures learn diﬀerent,
+complementary, policies, suggesting broad possibilities in the design space for future work.
+Acknowledgments
+We would like to thank for their feedback: Robert Baldock, Marc Bellemare, Jannis Bulian, Michelangelo
+Diligenti, Sylvain Gelly, Thomas Hubert, Rudolf Kadlec, Kenton Lee, Simon Schmitt, Julian Schrittwieser,
+David Silver. We also thank the reviewers and action editor for their valuable comments and suggestions.
+15Published in Transactions on Machine Learning Research (06/2022)
+Table 4: Snippet of episode examples from the T5-G1 (boosting only) agent vs. the T5-G4 agent (all
+operators). The best performing T5 agent makes use of the boosting-only grammar. This example showcases
+one reason that might explain the superiority of this particular grammar. The BM25 results for the initial
+query, do not lead to satisfactory results, with a score of 0.081. The T5-G1 adjustments to the query; ﬁrst,
+boosting “draftees”, and later boosting “thon”, and “satnam” leads to almost perfect retrieval results with a
+score of 0.946. On the other hand, the T5-G4 agent decides to constraint the results in the ﬁrst step to those
+including the term “highschool”. While this is a topical term, this leads to a bad retrieval results set from
+which the agent cannot recover in later steps (omitted for brevity). The reason for this becomes apparent
+when inspecting the good search results of the T5-G1 agent: they do not contain the term “highschool”, but
+the terms “high school” or “high schoolers”. The constraint action (“+”) ﬁlters these good documents out.
+Query and Search Results Score
+q0 who was the last nba player to get drafted out of highschool
+Top-2 documents retrieved with q0: 0.081
+d1 Title 1996 NBA draft
+Content ...Jermaine O’Neal, Peja Stojaković, Antoine Walker), and one undrafted
+All-Star (Ben Wallace ), for a grand total of 11 All-Stars. ...
+d2 Title 2009 NBA draft
+Content ...The2009draft marked the ﬁrst time three sons of former NBA players
+were selected in the top 15 picks of the draft ...
+T5-G1 q 1who was the last nba player to get drafted out of highschool (contents:“draftees” ∧2)
+Top-2 documents after aggregation with retrieval results from T5-G1 q 1: 0.374
+d1 Title NBA high school draftees
+Content ...hold themselves back a year in high school before declaring for the draft,
+like with Satnam Singh Bhamara or Thon Maker . The NBA has long had
+a preference for players who played basketball at the collegiate level ...
+d1 Title 1996 NBA draft
+Content ...Jermaine O’Neal, Peja Stojaković, Antoine Walker), and one undrafted
+All-Star (Ben Wallace ), for a grand total of 11 All-Stars. ...
+T5-G1 q 3who was the last nba player to get drafted out of highschool
+(contents:“draftees” ∧2) (contents:“thon” ∧4) (contents:“satnam” ∧4)
+Top-2 documents after aggregation with retrieval results from T5-G1 q 3: 0.946
+d1 Title NBA draft
+Content ...However, because of the new age requirement put in place in 2005, high
+schoolseniors are no longer eligible for the draft, unless they were declared
+as postgraduates by the NBA, which would not happen until 2015 with Indian
+prospect Satnam Singh Bhamara in the second round and again in 2016 with
+South Sudanese–Australian prospect Thon Maker in the ﬁrst round. ...
+d2 Title Eligibility for the NBA draft
+Content ...However, in recent years, other players like Satnam Singh, Thon Maker ,
+and Matur Maker have looked to enter the NBA draft while still being high
+schoolers by exploiting a loophole where they enter the draft as high school
+postgraduates. ...
+T5-G4 q 1who was the last nba player to get drafted out of highschool +(contents:“highschool”)
+Top-2 documents after aggregation with retrieval results from T5-G4 q 1: 0.081
+d1 Title 1996 NBA draft
+Content ...Jermaine O’Neal, Peja Stojaković, Antoine Walker), and one undrafted
+All-Star (Ben Wallace ), for a grand total of 11 All-Stars. ...
+d2 Title 2009 NBA draft
+Content ...The2009draft marked the ﬁrst time three sons of former NBA players
+were selected in the top 15 picks of the draft ...
+16Published in Transactions on Machine Learning Research (06/2022)
+References
+Eugene Agichtein, Steve Lawrence, and Luis Gravano. Learning search engine speciﬁc query transformations
+for question answering. In Proceedings of WWW10 , pp. 169–178, 2001.
+N.J. Belkin, R.N. Oddy, and H.M. Brooks. Ask for Information Retrieval: Part I. Background and Theory.
+The Journal of Documentation , 38(2), 1982.
+Emily M. Bender, Timnit Gebru, Angelina McMillan-Major, and Shmargaret Shmitchell. On the dangers
+of stochastic parrots: Can language models be too big? In Proceedings of the 2021 ACM Conference on
+Fairness, Accountability, and Transparency , FAccT ’21, pp. 610–623, New York, NY, USA, 2021. doi:
+10.1145/3442188.3445922.
+Christopher Berner, Greg Brockman, Brooke Chan, Vicki Cheung, Przemyslaw Debiak, Christy Dennison,
+David Farhi, Quirin Fischer, Shariq Hashme, Chris Hesse, Rafal Józefowicz, Scott Gray, Catherine Olsson,
+Jakub Pachocki, Michael Petrov, Henrique Pondè de Oliveira Pinto, Jonathan Raiman, Tim Salimans,
+Jeremy Schlatter, Jonas Schneider, Szymon Sidor, Ilya Sutskever, Jie Tang, Filip Wolski, and Susan Zhang.
+Dota 2 with large scale deep reinforcement learning. https://arxiv.org/abs/1912.06680 , 2019.
+Su Lin Blodgett, Solon Barocas, Hal Daumé III, and Hanna Wallach. Language (technology) is power:
+A critical survey of “bias” in NLP. In Proceedings of the 58th Annual Meeting of the Association for
+Computational Linguistics , pp. 5454–5476, 2020. doi: 10.18653/v1/2020.acl-main.485. URL https:
+//aclanthology.org/2020.acl-main.485 .
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind
+Neelakantan, PranavShyam, GirishSastry, AmandaAskell, SandhiniAgarwal, ArielHerbert-Voss, Gretchen
+Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel Ziegler, Jeﬀrey Wu, Clemens Winter, Chris
+Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher
+Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot
+learners. In Advances in Neural Information Processing Systems , volume 33, pp. 1877–1901, 2020.
+Christian Buck, Jannis Bulian, Massimiliano Ciaramita, Andrea Gesmundo, Neil Houlsby, Wojciech Gajewski,
+and Wei Wang. Ask the right questions: Active question reformulation with reinforcement learning. In
+International Conference on Learning Representations , 2018.
+Danqi Chen, Adam Fisch, Jason Weston, and Antoine Bordes. Reading Wikipedia to answer open-domain
+questions. In Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics
+(Volume 1: Long Papers) , pp. 1870–1879, 2017.
+Lili Chen, Kevin Lu, Aravind Rajeswaran, Kimin Lee, Aditya Grover, Michael Laskin, Pieter Abbeel, Aravind
+Srinivas, and Igor Mordatch. Decision transformer: Reinforcement learning via sequence modeling. arXiv
+preprint arXiv:2106.01345 , 2021.
+N. Chomsky. Three models for the description of language. IRE Transactions on Information Theory , 2(3):
+113–124, 1956.
+N. Chomsky. Review of B. F. Skinner, Verbal Behavior .Language , 39:26–58, 1959.
+Leshem Choshen, Lior Fox, Zohar Aizenbud, and Omri Abend. On the weaknesses of reinforcement learning
+for neural machine translation. In International Conference on Learning Representations , 2020.
+Nick Craswell, Bhaskar Mitra, Emine Yilmaz, Daniel Fernando Campos, and Ellen M. Voorhees. Overview of
+the trec 2020 deep learning track. ArXiv, abs/2102.07662, 2020.
+W.B. Croft, Donald Metzler, and Trevor Strohman. Search Engines Information Retrieval in Practice .
+Addison Wesley, 2009.
+Rajarshi Das, Shehzaad Dhuliawala, Manzil Zaheer, and Andrew McCallum. Multi-step retriever-reader
+interaction for scalable open-domain question answering. In International Conference on Learning Repre-
+sentations , 2019.
+17Published in Transactions on Machine Learning Research (06/2022)
+JacobDevlin, Ming-WeiChang, KentonLee, andKristinaToutanova. BERT:Pre-trainingofdeepbidirectional
+transformers for language understanding. In Proceedings of the 2019 Conference of the North American
+Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long
+and Short Papers) , pp. 4171–4186, 2019.
+Hao Dong, Zihan Ding, and Shanghang Zhang (eds.). Imitation Learning , pp. 273–306. Springer Singapore,
+2020.
+Doug Downey, Susan Dumais, Dan Liebling, and Eric Horvitz. Understanding the Relationship between
+Searchers’ Queries and Information Goals. In Proceedings of the 17th ACM Conference on Information and
+Knowledge Management , 2008.
+Lasse Espeholt, Hubert Soyer, Remi Munos, Karen Simonyan, Vlad Mnih, Tom Ward, Yotam Doron, Vlad
+Firoiu, Tim Harley, Iain Dunning, Shane Legg, and Koray Kavukcuoglu. IMPALA: Scalable distributed
+deep-RL with importance weighted actor-learner architectures. In Proceedings of the 35th International
+Conference on Machine Learning , pp. 1407–1416, 2018.
+Lasse Espeholt, Raphaël Marinier, Piotr Stanczyk, Ke Wang, and Marcin Michalski. Seed rl: Scalable and
+eﬃcient deep-rl with accelerated central inference. In International Conference on Learning Representations ,
+2020.
+Laura A. Granka, Thorsten Joachims, and Geri Gay. Eye-tracking analysis of user behavior in www search.
+InProceedings of the 27th Annual International ACM SIGIR Conference on Research and Development in
+Information Retrieval , pp. 478–479, 2004.
+Marti Hearst. Search user interfaces . Cambridge University Press, Cambridge; New York, 2009.
+Jonathan Ho and Stefano Ermon. Generative adversarial imitation learning. In D. Lee, M. Sugiyama,
+U. Luxburg, I. Guyon, and R. Garnett (eds.), Advances in Neural Information Processing Systems ,
+volume 29, 2016.
+Hengyuan Hu, Denis Yarats, Qucheng Gong, Yuandong Tian, and Mike Lewis. Hierarchical decision making
+by generating and following natural language instructions. In Advances in Neural Information Processing
+Systems, volume 32, 2019.
+Jeﬀ Huang and Efthimis Efthimiadis. Analyzing and evaluating query reformulation strategies in web search
+logs. InCIKM, pp. 77–86, 2009.
+Gautier Izacard and Edouard Grave. Leveraging passage retrieval with generative models for open domain
+question answering. In Proceedings of the 16th Conference of the European Chapter of the Association for
+Computational Linguistics: Main Volume , 2021.
+Nasreen Jaleel, James Allan, W. Croft, Fernando Diaz, Leah Larkey, Xiaoyan Li, Mark Smucker, and Courtney
+Wade. Umass at trec 2004: Novelty and hard. 01 2004.
+Michael Janner, Qiyang Li, and Sergey Levine. Oﬄine reinforcement learning as one big sequence modeling
+problem. In Advances in Neural Information Processing Systems , 2021.
+B. J. Jansen, D. L. Booth, and A. Spink. Patterns of query reformulation during web searching. Journal of
+the American Society for Information Science and Technology , 60(7):1358–1371, 2009.
+Thorsten Joachims, Laura Granka, Bing Pan, Helene Hembrooke, and Geri Gay. Accurately interpreting
+clickthrough data as implicit feedback. In Proceedings of the 28th Annual International ACM SIGIR
+Conference on Research and Development in Information Retrieval , pp. 154–161, 2005.
+Vladimir Karpukhin, Barlas Oguz, Sewon Min, Patrick Lewis, Ledell Wu, Sergey Edunov, Danqi Chen, and
+Wen-tau Yih. Dense passage retrieval for open-domain question answering. In Proceedings of the 2020
+Conference on Empirical Methods in Natural Language Processing (EMNLP) , 2020.
+18Published in Transactions on Machine Learning Research (06/2022)
+Samuel Kiegeland and Julia Kreutzer. Revisiting the weaknesses of reinforcement learning for neural machine
+translation. In Proceedings of NAACL , 2021.
+Tom Kwiatkowski, Jennimaria Palomaki, Olivia Redﬁeld, Michael Collins, Ankur Parikh, Chris Alberti,
+Danielle Epstein, Illia Polosukhin, Matthew Kelcey, Jacob Devlin, Kenton Lee, Kristina N. Toutanova,
+Llion Jones, Ming-Wei Chang, Andrew Dai, Jakob Uszkoreit, Quoc Le, and Slav Petrov. Natural questions:
+a benchmark for question answering research. Transactions of the Association of Computational Linguistics ,
+2019.
+T. Lau and E. Horvitz. Patterns of Search: Analyzing and Modeling Web Query Reﬁnement. In Proceedings
+of the seventh international conference on User Modeling , 1999.
+Steve Lawrence and C. Lee. Giles. Context and page analysis for improved web search. IEEE Internet
+Computing , 2, 1998.
+Kenton Lee, Ming-Wei Chang, and Kristina Toutanova. Latent retrieval for weakly supervised open domain
+question answering. In Proceedings of the 57th Annual Meeting of the Association for Computational
+Linguistics , pp. 6086–6096, 2019.
+Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Veselin
+Stoyanov, and Luke Zettlemoyer. BART: Denoising sequence-to-sequence pre-training for natural language
+generation, translation, and comprehension. In Proceedings of the 58th Annual Meeting of the Association
+for Computational Linguistics, ACL 2020 , pp. 7871–7880, 07 2020a.
+Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich
+Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, Sebastian Riedel, and Douwe Kiela. Retrieval-
+augmented generation for knowledge-intensive nlp tasks. In H. Larochelle, M. Ranzato, R. Hadsell, M. F.
+Balcan, and H. Lin (eds.), Advances in Neural Information Processing Systems , volume 33, pp. 9459–9474,
+2020b.
+Patrick Lewis, Pontus Stenetorp, and Sebastian Riedel. Question and answer test-train overlap in open-
+domain question answering datasets. In Proceedings of the 16th Conference of the European Chapter of the
+Association for Computational Linguistics: Main Volume , 2021a.
+Patrick Lewis, Yuxiang Wu, Linqing Liu, Pasquale Minervini, Heinrich Küttler, Aleksandra Piktus, Pontus
+Stenetorp, and Sebastian Riedel. Paq: 65 million probably-asked questions and what you can do with
+them, 2021b.
+L. Li, W. Chu, J. Langford, and R.E. Schapire. A contextual-bandit approach to personalized news article.
+InProceedings of WWW , 2010.
+M; Hayes-Miches J Michie, D; Bain. Cognitive models from subcognitive skills. IEE control engineering
+series, 1990.
+Sewon Min, Jordan Boyd-Graber, Chris Alberti, Danqi Chen, Eunsol Choi, Michael Collins, Kelvin Guu,
+Hannaneh Hajishirzi, Kenton Lee, Jennimaria Palomaki, Colin Raﬀel, Adam Roberts, Tom Kwiatkowski,
+Patrick Lewis, Yuxiang Wu, Heinrich Küttler, Linqing Liu, Pasquale Minervini, Pontus Stenetorp, Sebastian
+Riedel, Sohee Yang, Minjoon Seo, Gautier Izacard, Fabio Petroni, Lucas Hosseini, Nicola De Cao, Edouard
+Grave, Ikuya Yamada, Sonse Shimaoka, Masatoshi Suzuki, Shumpei Miyawaki, Shun Sato, Ryo Takahashi,
+Jun Suzuki, Martin Fajcik, Martin Docekal, Karel Ondrej, Pavel Smrz, Hao Cheng, Yelong Shen, Xiaodong
+Liu, Pengcheng He, Weizhu Chen, Jianfeng Gao, Barlas Oguz, Xilun Chen, Vladimir Karpukhin, Stan
+Peshterliev, Dmytro Okhonko, Michael Schlichtkrull, Sonal Gupta, Yashar Mehdad, and Wen tau Yih.
+NeurIPS 2020 EﬃcientQA Competition: Systems, Analyses and Lessons Learned, 2021.
+Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Alex Graves, Ioannis Antonoglou, Daan Wierstra, and
+Martin Riedmiller. Playing atari with deep reinforcement learning. In NIPS Deep Learning Workshop ,
+2013.
+19Published in Transactions on Machine Learning Research (06/2022)
+Ali Montazeralghaem, Hamed Zamani, and James Allan. A reinforcement learning framework for relevance
+feedback. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development
+in Information Retrieval , pp. 59–68, 2020.
+Reiichiro Nakano, Jacob Hilton, S. Arun Balaji, Jeﬀ Wu, Long Ouyang, Christina Kim, Christopher Hesse,
+Shantanu Jain, Vineet Kosaraju, William Saunders, Xu Jiang, Karl Cobbe, Tyna Eloundou, Gretchen
+Krueger, Kevin Button, Matthew Knight, Benjamin Chess, and John Schulman. Webgpt: Browser-assisted
+question-answering with human feedback. ArXiv, abs/2112.09332, 2021.
+Karthik Narasimhan, Adam Yala, and Regina Barzilay. Improving information extraction by acquiring
+external evidence with reinforcement learning. In Proceedings of the 2016 Conference on Empirical Methods
+in Natural Language Processing , 2016.
+Karthik Narasimhan, Regina Barzilay, and Tommi S. Jaakkola. Deep transfer in reinforcement learning by
+language grounding. Journal of Artiﬁcial Intelligence Research , 63, 2018.
+Gergely Neu and Csaba Szepesvári. Training parsers by inverse reinforcement learning. Machine Learning ,
+77, 2009.
+Jakob Nielsen and Kara Pernice. Eyetracking Web Usability . New Riders Publishing, 2009.
+Rodrigo Nogueira and Kyunghyun Cho. Task-oriented query reformulation with reinforcement learning. In
+Proceedings of EMNLP , 2017.
+Vicki L. O’Day and Robin Jeﬀries. Orienteering in an information landscape: How information seekers get
+from here to there. In Proceedings of the INTERACT ’93 and CHI ’93 Conference on Human Factors in
+Computing Systems , 1993. URL https://doi.org/10.1145/169059.169365 .
+Dipasree Pal, Mandar Mitra, and Kalyankumar Datta. Query expansion using term distribution and term
+association. 03 2013.
+Yingqi Qu, Yuchen Ding, Jing Liu, Kai Liu, Ruiyang Ren, Wayne Xin Zhao, Daxiang Dong, Hua Wu,
+and Haifeng Wang. RocketQA: An optimized training approach to dense passage retrieval for open-
+domain question answering. In Proceedings of the 2021 Conference of the North American Chapter
+of the Association for Computational Linguistics: Human Language Technologies , 2021. URL https:
+//aclanthology.org/2021.naacl-main.466 .
+Colin Raﬀel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou,
+Wei Li, and Peter J. Liu. Exploring the limits of transfer learning with a uniﬁed text-to-text transformer.
+Journal of Machine Learning Research , 21(140):1–67, 2020.
+Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and Percy Liang. SQuAD: 100,000+ questions for
+machine comprehension of text. In Proceedings of the 2016 Conference on Empirical Methods in Natural
+Language Processing , pp. 2383–2392, 2016.
+Adam Roberts, Colin Raﬀel, and Noam Shazeer. How much knowledge can you pack into the parameters
+of a language model? In Proceedings of the 2020 Conference on Empirical Methods in Natural Language
+Processing (EMNLP) , 2020. URL https://aclanthology.org/2020.emnlp-main.437 .
+Stephen Robertson and Hugo Zaragoza. The Probabilistic Relevance Framework: BM25 and Beyond.
+Foundations and Trends in Information Retrieval , 3(4):333–389, 2009.
+J. J. Rocchio. Relevance feedback in information retrieval. In G. Salton (ed.), The Smart retrieval system -
+experiments in automatic document processing , pp. 313–323. Englewood Cliﬀs, NJ: Prentice-Hall, 1971.
+Erick Rodríguez-Hernandez, Juan Irving Vasquez-Gomez, and Juan Carlos Herrera-Lozada. Flying through
+gates using a behavioral cloning approach. In 2019 International Conference on Unmanned Aircraft Systems
+(ICUAS) , pp. 1353–1358, 2019.
+20Published in Transactions on Machine Learning Research (06/2022)
+Stephane Ross, Geoﬀrey Gordon, and Drew Bagnell. A reduction of imitation learning and structured
+prediction to no-regret online learning. In Proceedings of the Fourteenth International Conference on
+Artiﬁcial Intelligence and Statistics , volume 15 of Proceedings of Machine Learning Research , pp. 627–635,
+11–13 Apr 2011.
+Daniel M. Russell. The Joy of Search: A Google Insider’s Guide to Going Beyond the Basics . The MIT
+Press, 2019.
+Sophie Rutter, Nigel Ford, and Paul Clough. How do children reformulate their search queries? Information
+Research , 20(1), 2015.
+Arto Salomaa. Probabilistic and weighted grammars. Information and Control , 15:529–544, 1969.
+Julian Schrittwieser, Ioannis Antonoglou, Thomas Hubert, Karen Simonyan, Laurent Sifre, Simon Schmitt,
+Arthur Guez, Edward Lockhart, Demis Hassabis, Thore Graepel, Timothy Lillicrap, and David Silver.
+Mastering atari, go, chess and shogi by planning with a learned model. Nature, 588(588):604–609, 2020.
+Shobit Sharma, Girma Tewolde, and Jaerock Kwon. Behavioral cloning for lateral motion control of
+autonomous vehicles using deep learning. In 2018 IEEE International Conference on Electro/Information
+Technology (EIT) , pp. 0228–0233, 2018.
+David Silver, Aja Huang, Chris J. Maddison, Arthur Guez, Laurent Sifre, George van den Driessche, Julian
+Schrittwieser, Ioannis Antonoglou, Veda Panneershelvam, Marc Lanctot, Sander Dieleman, Dominik Grewe,
+John Nham, Nal Kalchbrenner, Ilya Sutskever, Timothy Lillicrap, Madeleine Leach, Koray Kavukcuoglu,
+Thore Graepel, and Demis Hassabis. Mastering the game of Go with deep neural networks and tree search.
+Nature, 529(7587):484–489, 2016.
+Artur Strzelecki. Eye-tracking studies of web search engines: A systematic literature review. Information , 11
+(6), 2020.
+Yi Chern Tan and L. Elisa Celis. Assessing social and intersectional biases in contextualized word representa-
+tions. In Advances in Neural Information Processing Systems , 2019.
+Jaime Teevan, Christine Alvarado, Mark S. Ackerman, and David R. Karger. The Perfect Search Engine
+is Not Enough: A Study of Orienteering Behavior in Directed Search. In Proceedings of the SIGCHI
+Conference on Human Factors in Computing Systems , 2004.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Lukasz Kaiser,
+and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems ,
+volume 30, 2017.
+Ellen Voorhees. The trec-8 question answering track report. In TREC, 11 2000.
+Yining Wang, Liwei Wang, Yuanzhi Li, Di He, and Tie-Yan Liu. A theoretical analysis of ndcg type ranking
+measures. In Proceedings of the 26th Annual Conference on Learning Theory , pp. 25–54, 2013.
+Kellie Webster, Xuezhi Wang, Ian Tenney, Alex Beutel, Emily Pitler, Ellie Pavlick, Jilin Chen, and Slav Petrov.
+Measuring and reducing gendered correlations in pre-trained models. https://arxiv.org/abs/2010.06032 ,
+2020.
+Wenhan Xiong, Xiang Li, Srini Iyer, Jingfei Du, Patrick Lewis, William Yang Wang, Yashar Mehdad, Scott
+Yih, Sebastian Riedel, Douwe Kiela, and Barlas Oguz. Answering complex open-domain questions with
+multi-hop dense retrieval. In International Conference on Learning Representations , 2021.
+Xingdi Yuan, Jie Fu, Marc-Alexandre Côté, Yi Tay, Chris Pal, and Adam Trischler. Interactive machine
+comprehensionwithinformationseekingagents. In Proceedings of the 58th Annual Meeting of the Association
+for Computational Linguistics , Online, July 2020. Association for Computational Linguistics.
+Y. Yue and T. Joachims. Interactively optimizing information retrieval systems as a dueling bandits problem.
+InProceedings of ICML , 2009.
+21Published in Transactions on Machine Learning Research (06/2022)
+Weinan Zhang, Xiangyu Zhao, Li Zhao, Dawei Yin, and Grace Hui Yang. Drl4ir: 2nd workshop on deep
+reinforcement learning for information retrieval. In Proceedings of the 44th International ACM SIGIR
+Conference on Research and Development in Information Retrieval , pp. 2681–2684, 2021.
+Victor Zhong, Tim Rocktäschel, and Edward Grefenstette. Rtfm: Generalising to new environment dynamics
+via reading. In International Conference on Learning Representations , 2020.
+22Published in Transactions on Machine Learning Research (06/2022)
+Appendix
+A Rocchio Sessions
+Algorithm 1: Rocchio Sessions
+input : A question-answer pair ( q,a),k= 5,num_steps = 20,N= 100,M= 100
+output: A set of observation-query expansion pairs for training a T5 agent RQE={(ot,∆qt)}
+RQE←∅qt←q;
+Dt←∅; // Unique documents found in the session
+q∗←q+(contents: “a”); // The ideal query
+D∗←LuceneBM25( q∗); // Use search to get the top kdocuments
+// Use the agent PS and MR components to rerank the documents, extract answer spans to compute
+the snippets from the top kresults, and compile the observation (cf. also Appendix B)
+o∗←ComputeObservation( q,q∗,D∗,k);
+Σ∗←TopNTermsByLuceneIDF( o∗,N); // Collect good search terms
+fort←1tonum_stepsdo
+Dt←Dt∪LuceneBM25( qt);
+ot←ComputeObservation( q,qt,Dt,k);
+Σt←TopNTermsByLuceneIDF( ot,N);
+Σ↑
+t←Σ∗∩Σt,Σ↓
+t←Σt−Σ∗;
+st←ComputeScore( q,Dt,k); // Compute the score using Eq.(7)
+max_score←st;
+best_action←∅;
+// Evaluate all available operators
+forop∈{+,−,∧0.1,∧2,∧4,∧6,∧8,‘ ’}do
+num_tries←0;
+forw∈Σ↑
+t∪Σ↓
+tdo
+if(op==/prime−/prime∧w∈Σ↓)∨(op/negationslash=/prime−/prime∧w∈Σ↑)∧(num_tries<M)then
+∆qt←op(w.field,w.term ); // Query refinement according to semantic operator
+q/prime←qt+ ∆qt;
+D/prime←Dt∪LuceneBM25( q/prime);
+s/prime←ComputeScore( q,D/prime,k);
+num_tries←num_tries + 1;
+ifs/prime>max_scorethen
+max_score←s/prime;
+best_action←∆qt;
+end
+else
+continue ;
+end
+end
+end
+ifmax_score>stthen
+// If the best action improves the score, add this step to the data, and continue the
+session
+qt←qt+best_action;
+RQE←RQE∪(ot,best_action );
+else
+return RQE;
+end
+end
+return RQE
+23Published in Transactions on Machine Learning Research (06/2022)
+Algorithm 1 provides a schematic summary of the procedure for generating Rocchio sessions described in §5.1,
+using the full set of grammar operators (G4). We omit the terms source for simplicity and readability, but it
+should be straightforward to reconstruct. Table A.10 shows another example of such a Rocchio expansion
+session.
+In Table A.1 below, we report the total number of expansion steps performed on NQ Train. These are used
+as supervised training data for our T5 agents.
+G0 G1 G2 G3 G4
+243,529 313,554 230,921 246,704 298,654
+Table A.1: Total number of Rocchio expansion steps in NQ Train for diﬀerent grammars on the 77,492
+Rocchio sessions.
+B Observation Building Details
+This section provides more details and examples about the encoding of observations for both the MuZero and
+the T5 agent. As described in Section 2.2, the main part of the observation consists of the top-5 documents
+from all results retrieved so far, ∪t
+i=0Di. The documents are sorted according to the PS score and reduced
+in size by extracting ﬁxed-length snippets around the machine reader’s predicted answer. Moreover, the
+corresponding Wikipedia article title is appended to each document snippet. The computational complexity
+of this step is determined by running a BERT-base (110M parameters) machine reader separately (albeit
+possibly in parallel) over ﬁve passages. In addition to the top documents, the observation includes the original
+question and information about any previous reﬁnements. While the main part of the observation is shared
+between the MuZero and the T5 agent, there are diﬀerences in the exact representation. The following two
+paragraphs give a detailed explanation and example for both agents.
+B.1 MuZero Agent’s State (cf. §2.2)
+The MuZero agent uses a custom BERT (initialized from BERT-base) with additional embedding layers to
+represent the diﬀerent parts of the observation. It consists of four individual embedding layers as depicted in
+Figure A.1. At ﬁrst, the standard layer for the tokens of the query, the current tree, and the current top-5
+documents D. The second layer assigns a type ID to each of the tokens representing if a token is part of the
+query, the tree, the predicted answer, the context, or the title of a document. The last two layers add scoring
+information about the tokens as ﬂoat values. We encode both the inverse document frequency (IDF) of a
+word and the documents’ passage selection (PS) score. Figure A.2 shows a concrete example of a state used
+by the MuZero agent.
+q0
+<latexit sha1_base64="q2caZ2IDFqyYjSdGSku7a55qoZo=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbOLuRCihP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXFtRKwecJxwP6IDJULBKFrp/rHn9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AEA0I2c</latexit>IDq
+<latexit sha1_base64="S0KyQJZBI0YqkLq0M+KKvEvYoTg=">AAAB8nicbVBNSwMxEM36WetX1aOXYBE8ld0q6LGoB71VsB+wXUo2zbah2WRNZsWy9Gd48aCIV3+NN/+NabsHbX0w8Hhvhpl5YSK4Adf9dpaWV1bX1gsbxc2t7Z3d0t5+06hUU9agSijdDolhgkvWAA6CtRPNSBwK1gqHVxO/9ci04UrewyhhQUz6kkecErCS3wH2BNnt9bj70C2V3Yo7BV4kXk7KKEe9W/rq9BRNYyaBCmKM77kJBBnRwKlg42InNSwhdEj6zLdUkpiZIJuePMbHVunhSGlbEvBU/T2RkdiYURzazpjAwMx7E/E/z08huggyLpMUmKSzRVEqMCg8+R/3uGYUxMgSQjW3t2I6IJpQsCkVbQje/MuLpFmteKeV6t1ZuXaZx1FAh+gInSAPnaMaukF11EAUKfSMXtGbA86L8+58zFqXnHzmAP2B8/kDfL2RYg==</latexit>l0,...,lm
+<latexit sha1_base64="P5xe/uYHktZogTVUW0BvkmIixw0=">AAAB+HicbVBNSwMxFHxbv2r96KpHL8EieChltwp6LHrxWMHWQrss2TTbhibZJckKtfSXePGgiFd/ijf/jWm7B20dCAwzb3gvE6WcaeN5305hbX1jc6u4XdrZ3dsvuweHbZ1kitAWSXiiOhHWlDNJW4YZTjupolhEnD5Eo5uZ//BIlWaJvDfjlAYCDySLGcHGSqFb5qFXRb1+YnQV8VCEbsWreXOgVeLnpAI5mqH7ZcMkE1QawrHWXd9LTTDByjDC6bTUyzRNMRnhAe1aKrGgOpjMD5+iU6v0UZwo+6RBc/V3YoKF1mMR2UmBzVAvezPxP6+bmfgqmDCZZoZKslgUZxyZBM1aQH2mKDF8bAkmitlbERlihYmxXZVsCf7yl1dJu17zz2v1u4tK4zqvowjHcAJn4MMlNOAWmtACAhk8wyu8OU/Oi/PufCxGC06eOYI/cD5/ADTmkiY=</latexit>IDtree
+<latexit sha1_base64="OzLFw5Y5TBBJc+3iKwq1/gtgcuw=">AAACAXicbZDLSsNAFIYnXmu8Rd0IboJFcFWSKuiyqAvdVbAXaEOZTE/boZMLMydiCXHjq7hxoYhb38Kdb+O0zUJbfxj4+M85nDm/Hwuu0HG+jYXFpeWV1cKaub6xubVt7ezWVZRIBjUWiUg2fapA8BBqyFFAM5ZAA19Awx9ejuuNe5CKR+EdjmLwAtoPeY8zitrqWPtmG+EB05urrJNOESVAlnWsolNyJrLnwc2hSHJVO9ZXuxuxJIAQmaBKtVwnRi+lEjkTkJntREFM2ZD2oaUxpAEoL51ckNlH2unavUjqF6I9cX9PpDRQahT4ujOgOFCztbH5X62VYO/cS3kYJwghmy7qJcLGyB7HYXe5BIZipIEyyfVfbTagkjLUoZk6BHf25Hmol0vuSal8e1qsXORxFMgBOSTHxCVnpEKuSZXUCCOP5Jm8kjfjyXgx3o2PaeuCkc/skT8yPn8ARwmXbw==</latexit>IDa,IDc,IDt,
+<latexit sha1_base64="Pq+o2XO/fCS05/DLkgopL0U/2/8=">AAACF3icbVBLS8NAEN7UV42vqEcvi0XwICWpgh6LetBbBfuANpTNdtMu3TzYnYgl5F948a948aCIV735b9y2OdjWgYXvMcPsfF4suALb/jEKS8srq2vFdXNjc2t7x9rda6gokZTVaSQi2fKIYoKHrA4cBGvFkpHAE6zpDa/GfvOBScWj8B5GMXMD0g+5zykBLXWtstkB9gjp7XXWTUl2gv9QOktB065Vssv2pPAicHJQQnnVutZ3pxfRJGAhUEGUajt2DG5KJHAqWGZ2EsViQoekz9oahiRgyk0nd2X4SCs97EdSvxDwRP07kZJAqVHg6c6AwEDNe2PxP6+dgH/hpjyME2AhnS7yE4EhwuOQcI9LRkGMNCBUcv1XTAdEEgo6SlOH4MyfvAgalbJzWq7cnZWql3kcRXSADtExctA5qqIbVEN1RNETekFv6N14Nl6ND+Nz2low8pl9NFPG1y+kR5+Y</latexit>...,IDa,IDc,IDt
+<latexit sha1_base64="qKsCb2atCEiqQxge4IG7VDqmGOY=">AAACHHicbVDLSsNAFJ34rPUVdelmsAgupCStoMuiLnRXwT6gDWEynbRDJw9mbsQS8iFu/BU3LhRx40Lwb5y2WdjWAwPnnnMvd+7xYsEVWNaPsbS8srq2Xtgobm5t7+yae/tNFSWSsgaNRCTbHlFM8JA1gINg7VgyEniCtbzh1dhvPTCpeBTewyhmTkD6Ifc5JaAl16wWu70I1CnuAnuE9PY6c1OSzZR0toTMNUtW2ZoALxI7JyWUo+6aX3oJTQIWAhVEqY5txeCkRAKngmXFbqJYTOiQ9FlH05AETDnp5LgMH2ulh/1I6hcCnqh/J1ISKDUKPN0ZEBioeW8s/ud1EvAvnJSHcQIspNNFfiIwRHicFO5xySiIkSaESq7/iumASEJB51nUIdjzJy+SZqVsV8uVu7NS7TKPo4AO0RE6QTY6RzV0g+qogSh6Qi/oDb0bz8ar8WF8TluXjHzmAM3A+P4F1fSh4A==</latexit>idf(q0)
+<latexit sha1_base64="/jziBSASRLIwoL8ExveH0GltBCw=">AAAB+XicbVBNS8NAEN3Urxq/oh69BItQLyWpgh6LXjxWsB/QhrDZbNqlm03cnRRL6D/x4kERr/4Tb/4bt20O2vpg4PHeDDPzgpQzBY7zbZTW1jc2t8rb5s7u3v6BdXjUVkkmCW2RhCeyG2BFORO0BQw47aaS4jjgtBOMbmd+Z0ylYol4gElKvRgPBIsYwaAl37LMPtAnyFkYTauPvnPuWxWn5sxhrxK3IBVUoOlbX/0wIVlMBRCOleq5TgpejiUwwunU7GeKppiM8ID2NBU4psrL55dP7TOthHaUSF0C7Ln6eyLHsVKTONCdMYahWvZm4n9eL4Po2suZSDOggiwWRRm3IbFnMdghk5QAn2iCiWT6VpsMscQEdFimDsFdfnmVtOs196JWv7+sNG6KOMroBJ2iKnLRFWqgO9RELUTQGD2jV/Rm5MaL8W58LFpLRjFzjP7A+PwBkWWS9g==</latexit>0
+<latexit sha1_base64="rsPGDo38dCUrLsAt/ftnosrChUA=">AAAB6HicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48t2FpoQ9lsJ+3azSbsboQS+gu8eFDEqz/Jm//GbZuDtj4YeLw3w8y8IBFcG9f9dgpr6xubW8Xt0s7u3v5B+fCoreNUMWyxWMSqE1CNgktsGW4EdhKFNAoEPgTj25n/8IRK81jem0mCfkSHkoecUWOlptsvV9yqOwdZJV5OKpCj0S9/9QYxSyOUhgmqdddzE+NnVBnOBE5LvVRjQtmYDrFrqaQRaj+bHzolZ1YZkDBWtqQhc/X3REYjrSdRYDsjakZ62ZuJ/3nd1ITXfsZlkhqUbLEoTAUxMZl9TQZcITNiYgllittbCRtRRZmx2ZRsCN7yy6ukXat6F9Va87JSv8njKMIJnMI5eHAFdbiDBrSAAcIzvMKb8+i8OO/Ox6K14OQzx/AHzucPemeMuA==</latexit>0
+<latexit sha1_base64="rsPGDo38dCUrLsAt/ftnosrChUA=">AAAB6HicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48t2FpoQ9lsJ+3azSbsboQS+gu8eFDEqz/Jm//GbZuDtj4YeLw3w8y8IBFcG9f9dgpr6xubW8Xt0s7u3v5B+fCoreNUMWyxWMSqE1CNgktsGW4EdhKFNAoEPgTj25n/8IRK81jem0mCfkSHkoecUWOlptsvV9yqOwdZJV5OKpCj0S9/9QYxSyOUhgmqdddzE+NnVBnOBE5LvVRjQtmYDrFrqaQRaj+bHzolZ1YZkDBWtqQhc/X3REYjrSdRYDsjakZ62ZuJ/3nd1ITXfsZlkhqUbLEoTAUxMZl9TQZcITNiYgllittbCRtRRZmx2ZRsCN7yy6ukXat6F9Va87JSv8njKMIJnMI5eHAFdbiDBrSAAcIzvMKb8+i8OO/Ox6K14OQzx/AHzucPemeMuA==</latexit>Layer<latexit sha1_base64="Em1Ed+z6u16Dm98c3Ksvxjomalg=">AAAB8HicbVA9SwNBEJ2LXzF+RS1tFoNgFe5ioWXQxsIigvmQ5Ah7m7lkye7dsbsnHCG/wsZCEVt/jp3/xk1yhSY+GHi8N8PMvCARXBvX/XYKa+sbm1vF7dLO7t7+QfnwqKXjVDFssljEqhNQjYJH2DTcCOwkCqkMBLaD8c3Mbz+h0jyOHkyWoC/pMOIhZ9RY6bEXhOSOZqj65Ypbdecgq8TLSQVyNPrlr94gZqnEyDBBte56bmL8CVWGM4HTUi/VmFA2pkPsWhpRidqfzA+ekjOrDEgYK1uRIXP198SESq0zGdhOSc1IL3sz8T+vm5rwyp/wKEkNRmyxKEwFMTGZfU8GXCEzIrOEMsXtrYSNqKLM2IxKNgRv+eVV0qpVvYtq7b5WqV/ncRThBE7hHDy4hDrcQgOawEDCM7zCm6OcF+fd+Vi0Fpx85hj+wPn8AVN5kBc=</latexit>Query<latexit sha1_base64="EZ1q8F+EydebgOoqUorliQkEdW4=">AAAB8HicbVA9SwNBEJ2LXzF+RS1tFoNgFe5ioWXQxjIB8yHJEfY2c8mSvb1jd08IR36FjYUitv4cO/+Nm+QKTXww8Hhvhpl5QSK4Nq777RQ2Nre2d4q7pb39g8Oj8vFJW8epYthisYhVN6AaBZfYMtwI7CYKaRQI7ASTu7nfeUKleSwfzDRBP6IjyUPOqLHSYz8ISTNFNR2UK27VXYCsEy8nFcjRGJS/+sOYpRFKwwTVuue5ifEzqgxnAmelfqoxoWxCR9izVNIItZ8tDp6RC6sMSRgrW9KQhfp7IqOR1tMosJ0RNWO96s3F/7xeasIbP+MySQ1KtlwUpoKYmMy/J0OukBkxtYQyxe2thI2poszYjEo2BG/15XXSrlW9q2qtWavUb/M4inAG53AJHlxDHe6hAS1gEMEzvMKbo5wX5935WLYWnHzmFP7A+fwBeZKQMA==</latexit>Tree<latexit sha1_base64="g3aYmPNFnnTGPj1O9uwOB7HuJeI=">AAAB73icbVA9SwNBEJ2LXzF+RS1tFoNgFe5ioWXQxjJCviA5wt5mLlmyt3fu7gnhyJ+wsVDE1r9j579xk1yhiQ8GHu/NMDMvSATXxnW/ncLG5tb2TnG3tLd/cHhUPj5p6zhVDFssFrHqBlSj4BJbhhuB3UQhjQKBnWByN/c7T6g0j2XTTBP0IzqSPOSMGit1+0FImgpxUK64VXcBsk68nFQgR2NQ/uoPY5ZGKA0TVOue5ybGz6gynAmclfqpxoSyCR1hz1JJI9R+trh3Ri6sMiRhrGxJQxbq74mMRlpPo8B2RtSM9ao3F//zeqkJb/yMyyQ1KNlyUZgKYmIyf54MuUJmxNQSyhS3txI2pooyYyMq2RC81ZfXSbtW9a6qtYdapX6bx1GEMziHS/DgGupwDw1oAQMBz/AKb86j8+K8Ox/L1oKTz5zCHzifP4abj6A=</latexit>Document Results<latexit sha1_base64="tER6OCei91txxSw8zoRuVJ1TuOI=">AAAB/XicbVDLSgMxFL3js9bX+Ni5CRbBVZmpC10WdeGyin1AO5RMeqcNzTxIMkIdir/ixoUibv0Pd/6NaTsLbT0QOJxzb3Jy/ERwpR3n21paXlldWy9sFDe3tnd27b39hopTybDOYhHLlk8VCh5hXXMtsJVIpKEvsOkPryZ+8wGl4nF0r0cJeiHtRzzgjGojde3Djh+Q65ilIUaa3KFKhVZdu+SUnSnIInFzUoIcta791enldzBBlWq7TqK9jErNmcBxsZMqTCgb0j62DY1oiMrLpunH5MQoPRLE0hyTYar+3shoqNQo9M1kSPVAzXsT8T+vnergwst4lKQaIzZ7KEgF0TGZVEF6XCLTYmQIZZKbrIQNqKRMm8KKpgR3/suLpFEpu2flym2lVL3M6yjAERzDKbhwDlW4gRrUgcEjPMMrvFlP1ov1bn3MRpesfOcA/sD6/AEquJUK</latexit>Tokens<latexit sha1_base64="xPRtvX+9aDwyajmVkfv9HeuXxJI=">AAAB7XicbVA9SwNBEJ2LXzF+RS1tDoNgFe5ioWXQxjJCviA5wt5mLlmzt3vs7gnhyH+wsVDE1v9j579xk1yhiQ8GHu/NMDMvTDjTxvO+ncLG5tb2TnG3tLd/cHhUPj5pa5kqii0quVTdkGjkTGDLMMOxmygkccixE07u5n7nCZVmUjTNNMEgJiPBIkaJsVK7KSco9KBc8areAu468XNSgRyNQfmrP5Q0jVEYyonWPd9LTJARZRjlOCv1U40JoRMywp6lgsSog2xx7cy9sMrQjaSyJYy7UH9PZCTWehqHtjMmZqxXvbn4n9dLTXQTZEwkqUFBl4uilLtGuvPX3SFTSA2fWkKoYvZWl46JItTYgEo2BH/15XXSrlX9q2rtoVap3+ZxFOEMzuESfLiGOtxDA1pA4RGe4RXeHOm8OO/Ox7K14OQzp/AHzucPp3SPLA==</latexit>Type<latexit sha1_base64="atUwDPx+A0CTFKhORAxU7OQ3szo=">AAAB63icbVDLSgNBEOz1GeMr6tHLYBA8hd140GPQi8cIeUGyhNnJbDJkHsvMrBCW/IIXD4p49Ye8+TfOJnvQxIKGoqqb7q4o4cxY3//2Nja3tnd2S3vl/YPDo+PKyWnHqFQT2iaKK92LsKGcSdq2zHLaSzTFIuK0G03vc7/7RLVhSrbsLKGhwGPJYkawzaWWk4aVql/zF0DrJChIFQo0h5WvwUiRVFBpCcfG9AM/sWGGtWWE03l5kBqaYDLFY9p3VGJBTZgtbp2jS6eMUKy0K2nRQv09kWFhzExErlNgOzGrXi7+5/VTG9+GGZNJaqkky0VxypFVKH8cjZimxPKZI5ho5m5FZII1JtbFU3YhBKsvr5NOvRZc1+qP9WrjroijBOdwAVcQwA004AGa0AYCE3iGV3jzhPfivXsfy9YNr5g5gz/wPn8AG8yORg==</latexit>IDF Score<latexit sha1_base64="jwnweot7Hmhg2q8/vqDv/uONvUs=">AAAB8HicbVDLSgNBEJz1GeMr6tHLYBA8hd140GNQEb1FNA9JljA76SRD5rHMzAphyVd48aCIVz/Hm3/jJNmDJhY0FFXddHdFMWfG+v63t7S8srq2ntvIb25t7+wW9vbrRiWaQo0qrnQzIgY4k1CzzHJoxhqIiDg0ouHlxG88gTZMyQc7iiEUpC9Zj1FinfR4e3WN76nS0CkU/ZI/BV4kQUaKKEO1U/hqdxVNBEhLOTGmFfixDVOiLaMcxvl2YiAmdEj60HJUEgEmTKcHj/GxU7q4p7QrafFU/T2REmHMSESuUxA7MPPeRPzPayW2dx6mTMaJBUlni3oJx1bhyfe4yzRQy0eOEKqZuxXTAdGEWpdR3oUQzL+8SOrlUnBaKt+Vi5WLLI4cOkRH6AQF6AxV0A2qohqiSKBn9IrePO29eO/ex6x1yctmDtAfeJ8/1ROPxQ==</latexit>PS Score<latexit sha1_base64="RNcqSotruBTNJRftMaxzgrmi+Lk=">AAAB73icbVA9SwNBEJ3zM8avqKXNYhCswl0stAzaWEZiPiA5wt5mLlmyt3fu7gnhyJ+wsVDE1r9j579xk1yhiQ8GHu/NMDMvSATXxnW/nbX1jc2t7cJOcXdv/+CwdHTc0nGqGDZZLGLVCahGwSU2DTcCO4lCGgUC28H4dua3n1BpHssHM0nQj+hQ8pAzaqzUqTdIg8UK+6WyW3HnIKvEy0kZctT7pa/eIGZphNIwQbXuem5i/Iwqw5nAabGXakwoG9Mhdi2VNELtZ/N7p+TcKgMSxsqWNGSu/p7IaKT1JApsZ0TNSC97M/E/r5ua8NrPuExSg5ItFoWpICYms+fJgCtkRkwsoUxxeythI6ooMzaiog3BW355lbSqFe+yUr2vlms3eRwFOIUzuAAPrqAGd1CHJjAQ8Ayv8OY8Oi/Ou/OxaF1z8pkT+APn8wdlu4+L</latexit>idf(a0),idf(c0),idf(t0),...,idf(an),idf(cn),idf(tn)
+<latexit sha1_base64="O3B7wVKWAjKvpJYGqWtO7ERfMS8=">AAACVHicbZFLSwMxFIUzU6u1aq26dBMsQgtSZqqgy6IblxXsA9oyZNJMG5rJDMkdsQz9kboQ/CVuXJg+Fu3UC4HDd+/hJid+LLgGx/m27Nxefv+gcFg8Oj4pnZbPzjs6ShRlbRqJSPV8opngkrWBg2C9WDES+oJ1/enTot99Y0rzSL7CLGbDkIwlDzglYJBXng6AvUPKR8G8SjyndoM3AM0CWIFRBHqLE09mnTLrlDWvXHHqzrLwrnDXooLW1fLKn2YVTUImgQqidd91YhimRAGngs2Lg0SzmNApGbO+kZKETA/TZShzfG3ICAeRMkcCXtJNR0pCrWehbyZDAhOd7S3gf71+AsHDMOUyToBJuloUJAJDhBcJ4xFXjIKYGUGo4uaumE6IIhTMPxRNCG72ybui06i7t/XGy12l+biOo4Au0RWqIhfdoyZ6Ri3URhR9oB8LWZb1Zf3aOTu/GrWttecCbZVd+gMhtbHy</latexit>a0,c0,t0,...,an,cn,tn
+<latexit sha1_base64="Rppm5OufQnYTVueQ68teunkfTis=">AAACDHicbVDLSgMxFM3UV62vqks3wSK4KGWmCrosunFZwbZCOwyZNNOGZjJDckcopR/gxl9x40IRt36AO//GpJ2Fth7I5XDOvUnuCVPBNbjut1NYWV1b3yhulra2d3b3yvsHbZ1kirIWTUSi7kOimeCStYCDYPepYiQOBeuEo2vrdx6Y0jyRdzBOmR+TgeQRpwSMFJQrJHCrmNoCtvT6CegqJoG0qrSq7XJr7gx4mXg5qaAczaD8Za6hWcwkUEG07npuCv6EKOBUsGmpl2mWEjoiA9Y1VJKYaX8yW2aKT4zSx1GizJGAZ+rviQmJtR7HoemMCQz1omfF/7xuBtGlP+EyzYBJOn8oygSGBNtkcJ8rRkGMDSFUcfNXTIdEEQomv5IJwVtceZm06zXvrFa/Pa80rvI4iugIHaNT5KEL1EA3qIlaiKJH9Ixe0Zvz5Lw4787HvLXg5DOH6A+czx/8d5hv</latexit>idf(l0),...,idf(lm)
+<latexit sha1_base64="MIAgd3IkT6c4y69KHryVQl8wn4c=">AAACEHicbVDLSgMxFM3UV62vUZdugkVsQcpMFXRZdOOygn1AOwyZNNOGZh4kd8Qy9BPc+CtuXCji1qU7/8a0nUVtPRByOOfem9zjxYIrsKwfI7eyura+kd8sbG3v7O6Z+wdNFSWSsgaNRCTbHlFM8JA1gINg7VgyEniCtbzhzcRvPTCpeBTewyhmTkD6Ifc5JaAl1zztAnuElPf8cUm4VvkMd3sRKH3N60HZNYtWxZoCLxM7I0WUoe6a33oQTQIWAhVEqY5txeCkRAKngo0L3USxmNAh6bOOpiEJmHLS6UJjfKKVHvYjqU8IeKrOd6QkUGoUeLoyIDBQi95E/M/rJOBfOSkP4wRYSGcP+YnAEOFJOrjHJaMgRpoQKrn+K6YDIgkFnWFBh2AvrrxMmtWKfV6p3l0Ua9dZHHl0hI5RCdnoEtXQLaqjBqLoCb2gN/RuPBuvxofxOSvNGVnPIfoD4+sXngucUA==</latexit>PS(d0),...,PS(dn)
+<latexit sha1_base64="QR3EuXrMcVUn08aNZEEsH4fTc7M=">AAACDnicbVDLSgMxFM34rPU16tJNsBRakDJTBV0W3bisaB/QDkMmTdvQTGZI7ohl6Be48VfcuFDErWt3/o3pY1FbD4Qczrn3JvcEseAaHOfHWlldW9/YzGxlt3d29/btg8O6jhJFWY1GIlLNgGgmuGQ14CBYM1aMhIFgjWBwPfYbD0xpHsl7GMbMC0lP8i6nBIzk2/k2sEdIq3ejQsd3iqe43YlAm2tOlkXfzjklZwK8TNwZyaEZqr79bebQJGQSqCBat1wnBi8lCjgVbJRtJ5rFhA5Ij7UMlSRk2ksn64xw3igd3I2UORLwRJ3vSEmo9TAMTGVIoK8XvbH4n9dKoHvppVzGCTBJpw91E4EhwuNscIcrRkEMDSFUcfNXTPtEEQomwawJwV1ceZnUyyX3rFS+Pc9VrmZxZNAxOkEF5KILVEE3qIpqiKIn9ILe0Lv1bL1aH9bntHTFmvUcoT+wvn4BZDibDQ==</latexit>
+Figure A.1: Schematic illustration of the MuZero search agent’s state for the BERT representation function.
+24Published in Transactions on Machine Learning Research (06/2022)
+Table A.2: Example state of the MuZero search agent that is the input to the BERT representation function.
+The ‘Type’ layer encodes the state part information for each token. The ‘IDF’ and ‘PS’ layer are additional
+layers with ﬂoat values of the IDF and the PS score of the input tokens, respectively.
+Tokens [CLS] who carries the burden of going forward with evidence in a trial
+···Type [CLS] query query query query query query query query query query query query
+IDF 0.00 0.00 6.77 0.00 7.77 0.00 5.13 5.53 0.00 5.28 0.00 0.00 5.77
+PS 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+Tokens [SEP] [pos] [content] burden ##s [neg] [title] sometimes [SEP] lit ##igan ##ts [SEP]
+···Type [SEP] tree tree tree tree tree tree tree [SEP] answer answer answer [SEP]
+IDF 0.00 0.00 0.00 9.64 9.64 0.00 0.00 4.92 0.00 10.64 10.64 10.64 0.00
+PS 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 -3.80 -3.80 -3.80 -3.80
+Tokens kinds for each party , in diﬀerent phases of litigation . the burden
+···Type context context context context context context context context context context context context context
+IDF 7.10 0.00 0.00 4.36 17.41 0.00 4.18 7.46 0.00 7.92 17.41 0.00 7.77
+PS -3.80 -3.80 -3.80 -3.80 -3.80 -3.80 -3.80 -3.80 -3.80 -3.80 -3.80 -3.80 -3.80
+Tokens suspicion " , " probable cause " ( as for [SEP] evidence [SEP]
+···Type context context context context context context context context context context [SEP] title [SEP]
+IDF 7.80 17.41 17.41 17.41 7.91 5.41 17.41 17.41 0.00 0.00 0.00 5.28 0.00
+PS -12.20 -12.20 -12.20 -12.20 -12.20 -12.20 -12.20 -12.20 -12.20 -12.20 -12.20 -12.20 -12.20
+B.2 T5 Agent’s State (cf. §3.1)
+T5 represents the state as a ﬂat string. The input is a concatenation of the original query, zero or more
+expansions, and ﬁve results. For each result, we include the answer given by the reader, the document’s title,
+and a span centered around the answer. The prediction target is simply the next expansion. See Table A.3
+for a full example.
+Table A.3: Example state (input) and prediction (target) of the T5 agent with linebreaks and emphasis
+added for readability. We use a 30 token span in our experiments.
+Input Query: ’how many parts does chronicles of narnia have’.
+Contents must contain: lewis.
+Contents cannot contain: battle boost 2.0.
+Answer: ’seven’.
+Title: ’The Chronicles of Narnia’.
+Result: The Chronicles of Narnia is a series of sevenfantasy novels by C. S. Lewis. It is considered a
+classic of children’s literature and is the author’s best-known work, having...
+Answer: ’seven’.
+Title: ’The Chronicles of Narnia (ﬁlm series)’.
+Result: ’"The Chronicles of Narnia", a series of novels by C. S. Lewis. From the sevenbooks, there have
+been three ﬁlm adaptations so far – (2005), "" (2008) and "" (2010)...
+Answer: ’seven’.
+Title: ’Religion in The Chronicles of Narnia’.
+Result: ’Religion in The Chronicles of Narnia "The Chronicles of Narnia" is a series of sevenfantasy
+novels for children written by C. S. Lewis. It is considered a classic of...
+Answer: ’seven’.
+Title: ’The Chronicles of Narnia’.
+Result: ’Lewis’s early life has parallels with "The Chronicles of Narnia". At the age of seven, he moved
+with his family to a large house on the edge of Belfast...
+Answer: ’Two’.
+Title: ’The Chronicles of Narnia’.
+Result: ’found in the most recent HarperCollins 2006 hardcover edition of "The Chronicles of Narnia".
+Twoother maps were produced as a result of the popularity of the 2005 ﬁlm ...
+Target Contents must contain: novels
+25Published in Transactions on Machine Learning Research (06/2022)
+Figure A.2: Performance (NDCG@5, EM, and Top-5, respectively) of the Rocchio episodes from NQ-dev
+guided by the composite score of Equation 7, as a function of the coeﬃcients λ1andλ2.
+C Reward details
+We investigate the eﬀects of the three score components in the deﬁnition of the composite scoring function of
+Eq. 7. As mentioned in Section 4, in our experiments we have observed that using only the NDCGkscore
+as reward signal (i.e., setting λ1=λ2= 0in Eq. 7) has several limitations. This motivated us to introduce
+theNDCEMkandPScomponents with the intent of: 1) providing further guidance to the agent (whenever
+NDCGkcannot be increased, the agent can further reﬁne the query by increasing NDCEMkorPS), and 2)
+regularizing the search episodes by making the score more robust with respect to exploratory behaviors that
+could lead to drift.
+We run a grid search over the reward coeﬃcients λ1,λ2and, for each of their values, we evaluate the
+performance of the Rocchio sessions on NQ Dev (for a high throughput, we select grammar G3and set
+N=M= 20). Figure A.2 shows the respective end-to-end performance in terms of our three main quality
+metrics: NDCG@5, EM, and Top-5.
+The results in Figure A.2 support our intents: by introducing NDCEMkandPSscores in the reward (i.e.,
+settingλ1,λ2>0), the Rocchio expansions can achieve signiﬁcantly higher performance, in all the three
+metrics, with respect to using only an NDCGkscore (λ1=λ2= 0) (notably, it improves also the NDCG@5
+itself, meaning that the agent is not trading-oﬀ performance metrics but it is indeed producing higher quality
+sessions). It is also worth pointing out the role of the NDCEMkscore component, weighted by coeﬃcient
+λ2. Notice that good NDCG@5 and Top-5 performance could be achieved also setting λ2= 0(see, e.g.,
+the bottom-right corner λ1= 1,λ2= 0). However, this leads to deﬁnitely worse EM results compared to
+whenλ2>0. Intuitively, a NDCEMkcomponent λ2>0ensures that the returned documents, in addition
+to containing the gold answer (thus having high NDCG@5 and Top-5), are also relevant for the query
+(thus reaching a high EM). Hence, it is crucial to prevent semantic drifts. Based on these results we set
+λ1= 0.2,λ2= 0.6, which is a sweet spot in Figure A.2.
+D Model, Training Conﬁguration, and Computational Complexity
+D.1 MuZero
+The MuZero agent learner, which performs both inference and training, runs on a Cloud TPU v2 with 8
+cores which is roughly equivalent to 10 Nvidia P100 GPUs in terms of TFLOPS.10One core is allocated
+for training and 7 cores are allocated for inference. We use 500 CPU based actors along with 80 actors
+dedicated to evaluation. Each agent is trained for 1.6 million steps, with 100 simulations per step, at an
+approximate speed of 10,000 steps per hour. In total, training takes about 10 days. Hyperparameters are
+listed in Table A.4.
+10The Cloud TPU v2 has a peak performance of 180 TFLOPS ( https://cloud.google.com/tpu ), whereas the Nvidia P100
+GPU goes up to 18.7 TFLOPS depending on precision ( https://cloud.google.com/compute/docs/gpus ).
+26Published in Transactions on Machine Learning Research (06/2022)
+Computational Complexity The computational complexity of a single step of the MuZero agent is
+determined by the complexity of the state encoding function (“h” in Figure A.3b) and the number of
+simulations during MCTS. For the state encoding function, we use BERT-base to encode the state and a
+GRU cell with a hidden size of 32 to encode the past actions. The maximum sequence length of the state is
+512. The recurrent inference function during the MCTS (“g” in Figure A.3b) is an LSTM with a hidden
+dimension of 512 that is invoked for each of the number of simulations (typically 100). On top of the LSTM
+representation, we use MLPs (“f” in Figure A.3b) with a single hidden layer with hidden dimension 512 as
+the policy, value, and reward head.
+Tuning WecarriedoutextensivemodelselectionandtuningwhileimplementingtheMuZeroalgorithmusing
+TicTacToe and Atari environments, and based on the information available in the original paper (Schrittwieser
+et al., 2020). We ran these experiments on a single TPU, to ensure the replicability of healthy training runs
+without extensive computing resources. We did not try to match the performance of the MuZero paper on
+the Atari and board games, because that would have required signiﬁcantly more compute resources and
+time and it was beyond the scope of our project. Optimizing MuZero can be hard because of the many
+hyperparameters, especially in the learning to search task where training can take a long time to stabilize.
+Thus, we relied to a large extent on the existing conﬁguration and attempted primarily to optimize the
+MCTS process. We tried to ﬁnd better parameters – via simple grid search – of prioritized and importance
+sampling (exponents), replay buﬀer and queue (sizes), action selection softmax (temperature), exploration
+noise (Dirichlet α), thec1,c2parameters of the Upper Conﬁdence Bound score and the number of simulations.
+In the end the main parameter that consistently aﬀected performance was the number of simulations. More
+simulations yield better performance, and slower training. We observed diminishing improvements after 100
+simulations and settled on that as the ﬁnal value. We also experimented with resetting the weights on the
+three-component loss (policy, value, reward) without observing convincing improvements. We did not try to
+ﬁnetune the representation function, the oﬀ-the-shelf BERT. A summary of the MuZero hyperparameters
+conﬁguration is in Table A.4.
+Table A.4: Hyperparameters for MuZero.
+Parameter Value
+Simulations per Step 100
+Actor Instances 500
+Training TPU Cores 1
+Inference TPU Cores 7
+Initial Inference Batch Size ( hθ) 4 per core
+Recurrent Inference Batch Size ( fθ,gθ) 32 per core
+LSTM Units ( gθ) One layer of 512
+Feed-forward Units ( fθ) One layer of 32
+Training Batch Size 16
+Optimizer SGD
+Learning Rate 1e−4
+Weight Decay 1e−5
+Discount Factor ( γ) .9
+Unroll Length ( K) 5
+Max. #actions Expanded per Step 100
+Max. context tokens from document title 10
+Max. context tokens from document content 70
+D.2 T5
+The T5 agent is trained for about 5 days on 16 Cloud TPU v3, starting from the pre-trained T5-11B
+checkpoint. We select the ﬁnal checkpoint based on the best Dev performance.
+27Published in Transactions on Machine Learning Research (06/2022)
+Computational Complexity The computational cost of the T5 agent is determined by the T5 model size
+and sequence lengths. To encode the state we use a maximum sequence length of 512. The decoder predicts
+the query expansion and has <32tokens. Additionally we use a beam size of 4. All reported experiments
+use the largest model, XXL with 11 billion parameters. Smaller models yield competitive but lower results.
+XXL consists of a 24 layer encoder and decoder with 128-headed attention mechanisms. The “key” and
+“value” matrices of all attention mechanisms have an inner dimensionality of 128. The feed-forward networks
+in each block consist of a dense layer with an output dimensionality of 65,536 and all other sub-layers and
+embeddings have a size of 1024.
+Tuning We ran many T5 experiments over the course of the project but didn’t perform extensive hy-
+perparameter tuning. As can be seen in Table A.5 we use mostly standard parameters for ﬁnetuning the
+11B parameter public T5 model following (Raﬀel et al., 2020). For example we did not experiment with
+learning-rate schedules, dropout rates, uncommon batch sizes etc. Our experiments mostly explored other
+design choices: how to represent the input (cf. Table A.3), how much of the context to use (here 30 token
+context worked slightly better than 70 tokens and was faster to train) and we compared the diﬀerent grammar
+types (G0-G4). For these experiments we used the T5-large model because it was quicker and we found that
+the insights carry over to the larger variants. After training we evaluated several checkpoints and picked the
+best checkpoint on the Dev set, as is common practice. We then ran the best checkpoint on the test set.
+Table A.5: Hyperparameters for T5.
+Parameter Value
+Number of Parameters 11B
+Encoder/Decoder Layers 24
+Feed-forward dimension 65536
+KV dimension 128
+Model dimension 1024
+Number of Heads 128
+Batch Size (in tokens) 65536
+Dropout Rate 0.1
+Learning Rate (constant) 0.0005
+Optimizer AdaFactor
+Maximum input length (tokens) 512
+Maximum target length (tokens) 32
+Finetuning steps on NQ Train 41400
+Max. context tokens from document title 10
+Max. context tokens from document content 30
+28Published in Transactions on Machine Learning Research (06/2022)
+E Results
+Table A.6 reports the results for the diﬀerent versions of the T5 agent, evaluated on dev. We don’t evaluate
+all agents with the generative answer system, for answer quality we report only the performance of the
+internal machine reader (EM-MR). Table A.7 reports extended results, including for NQ Dev and the PS/MR
+component answer quality eval (EM-MR). Moreover, in Figure 4b we plot the performance of our T5-G1
+agent on NQ Dev as a function of the maximum number of query reﬁnements. We observed the performance
+increase monotonically with the number of reﬁnements and that most of the performance gain is achieved in
+the early steps, in accordance with the respective supervised Rocchio episodes (Figure 4a).
+Table A.6: Results of all T5 Agents on NQ Dev.
+Version NDCG@5 Top-1 Top-5 EM-MR Reward
+G0 40.75 52.12 64.93 30.22 33.30
+G1 43.10 52.12 66.09 29.50 35.55
+G2 41.16 51.51 63.54 30.03 33.81
+G3 41.69 51.34 64.17 29.77 33.95
+G4 41.53 50.98 63.49 29.70 34.25
+Table A.7: Results on NQ Dev and Test.
+Metric Data BM25 +PS +RM3 MuZero T5-G1 MuZero+T5s DPR Rocchio-G4
+NDCG@5 Dev 19.83 22.95 25.09 30.76 43.10 45.30 - 64.89
+Test 21.51 24.82 26.99 32.23 44.27 46.22 - 65.24
+Top-1 Dev 28.17 43.06 44.81 46.02 52.12 54.15 - 74.99
+Test 28.67 44.93 46.13 47.97 52.60 54.29 52.47 73.74
+Top-5 Dev 50.47 50.47 53.61 57.71 66.09 70.05 - 88.21
+Test 53.76 53.76 56.33 59.97 66.59 71.05 72.24 88.17
+EM-MR Dev 15.31 25.15 26.22 27.17 29.50 31.12 - 47.38
+Test 14.79 25.87 26.95 28.19 30.08 30.58 41.50 46.34
+EM-T5 Dev 28.98 40.70 41.65 32.48 44.75 44.47 - 63.78
+Test 28.78 41.14 40.14 32.60 44.04 44.35 41.50 62.35
+E.1 Pseudo-Relevance Feedback Baselines
+We investigate the performance of multiple pseudo-relevance feedback (PRF) baselines on our setup. We
+employ these baselines by running search sessions of length k, where, at each step, we choose the most relevant
+term of the top-retrieved documents and add it to the query. To determine the most relevant term, we use
+either inverse document frequency (IDF), computed over our full retrieval corpus, or RM3 (Jaleel et al., 2004).
+For RM3, we use the model described in Eq. 20 of Pal et al. (2013) with µ= 2500. After each expansion
+step, we use the passage scorer (PS) to score and rank the documents. This is an important step, as we do
+this approach iteratively, so the baseline is more comparable to our agent’s setup. While a standard PRF
+baseline on top of BM25 adds a term to the query (equivalent to our “or”-operator), we investigate the eﬀect
+of diﬀerent Lucene operators that our agents have access to. In particular, we run for each of our 10 operators
+(“or”, “+content”, “+title”, “-content”, “-title”, “ ∧.1”, “∧2”, “∧4”, “∧6”, “∧8”) a PRF baseline with k= 20
+steps (same as our agents). The results are reported in Table A.8. Interestingly, the “-title”-operator, which
+limits search results not to contain any documents where the speciﬁed term is part of the title, works best
+across all metrics, datasets, and relevancy algorithms. This is in contrast to the standard motivation of PRF
+to promote relevant terms that appeared in the search results. Instead, requesting search results to contain
+newdocuments (with diﬀerent titles) seems to be the stronger heuristic. We believe that these experiments
+underline the beneﬁt of a learned agent to automatically pick the right operator based on the search session
+context.
+29Published in Transactions on Machine Learning Research (06/2022)
+Table A.8: Results on NQ Dev and Test for the pseudo-relevance feedback sessions. Here, we run episodes
+of length 20 where we determine, at each step, the most relevant term from the retrieved results using
+either inverse-document frequency “IDF” or “RM3”. We add the term using one of our 10 operators: simply
+appending the term (“or”), enforcing the term in the contentortitle(“+c”/“+t”), limiting the search to
+documents that not contain the term in the contextortitle(“-c”/“-t”), and boosting the term with diﬀerent
+values (“∧.1”,“∧2”,“∧4”,“∧6”,“∧8”). After each step in the episode, we aggregate the documents using
+the scores from our passage scorer (PS). The largest value in each table row is indicated in bold, and the
+second-largest is underlined.
+Metric Data Alg or +c +t -c -t ∧.1∧2∧4∧6∧8
+NDCG@5 Dev IDF 24.78 25.13 24.61 25.12 26.81 23.67 24.45 24.43 24.37 24.30
+Dev RM3 25.09 25.41 24.78 24.98 26.32 23.69 24.53 24.60 24.50 24.35
+Test IDF 26.48 26.60 26.33 27.32 29.33 25.51 26.35 26.25 26.19 26.08
+Test RM3 26.9926.98 26.70 26.90 28.59 25.47 26.60 26.61 26.54 26.37
+Top-1 Dev IDF 44.52 44.87 44.56 45.35 47.09 44.13 44.45 44.36 44.30 44.21
+Dev RM3 44.81 45.21 44.45 45.56 46.92 44.17 44.53 44.54 44.42 44.32
+Test IDF 45.93 45.90 46.10 47.09 49.29 45.84 46.18 46.01 45.98 45.90
+Test RM3 46.13 46.41 46.30 47.37 49.03 45.78 46.41 46.24 46.18 46.10
+Top-5 Dev IDF 53.08 53.15 52.95 54.27 56.49 51.74 52.59 52.68 52.61 52.58
+Dev RM3 53.61 53.85 53.19 54.29 56.01 51.91 52.88 53.06 52.91 52.82
+Test IDF 55.62 55.62 55.42 57.37 60.14 54.96 55.56 55.50 55.50 55.42
+Test RM3 56.33 56.27 56.07 57.54 59.58 55.04 55.99 56.02 55.99 55.93
+F Details and Examples for the Grammar-Guided MCTS
+Q⇒W Q|U Q|STOP
+U⇒Op Field W
+Op⇒ −| +|∧i
+i∈{0.1,2,4,6,8}
+Field⇒title|contents
+Wx⇒Vx|VxWx
+Wx⇒Vx|VxWx
+Vx⇒ { w|w∈VB∧
+trie(Σx).HasSubstring( w)}
+Vx⇒ { w|#w∈V#
+B∧
+trie(Σx).HasSubstring(− →w)}
+(a) The productions of the query grammar: xidenti-
+ﬁes a speciﬁc vocabulary induced by the aggregated
+results at time t(index omitted), VB(V#
+B) is the
+BERT wordpiece preﬁx (suﬃx) vocabulary,− →wde-
+notes the string ending at w, including the preceding
+wordpieces.
+{ot,at}
+<latexit sha1_base64="j4pUnFObpA5efrmHhIdduT/srRw=">AAAB83icbVBNS8NAEN3Ur1q/qh69LBbBg5SkCnosevFYwX5AE8Jmu2mXbnbD7kQooX/DiwdFvPpnvPlv3LY5aOuDgcd7M8zMi1LBDbjut1NaW9/Y3CpvV3Z29/YPqodHHaMyTVmbKqF0LyKGCS5ZGzgI1ks1I0kkWDca38387hPThiv5CJOUBQkZSh5zSsBKvp+rEC4wCcGfhtWaW3fnwKvEK0gNFWiF1S9/oGiWMAlUEGP6nptCkBMNnAo2rfiZYSmhYzJkfUslSZgJ8vnNU3xmlQGOlbYlAc/V3xM5SYyZJJHtTAiMzLI3E//z+hnEN0HOZZoBk3SxKM4EBoVnAeAB14yCmFhCqOb2VkxHRBMKNqaKDcFbfnmVdBp177LeeLiqNW+LOMroBJ2ic+Sha9RE96iF2oiiFD2jV/TmZM6L8+58LFpLTjFzjP7A+fwBnXuRaA==</latexit>p1,v1
+<latexit sha1_base64="jlVfM0mDP+5A56MqRCPIGI/Iq+E=">AAAB73icdVDLSsNAFJ3UV62vqks3g0VwISHTxlR3RTcuK9gHtCFMppN26OThzKRQQn/CjQtF3Po77vwbJ20FFT1w4XDOvdx7j59wJpVlfRiFldW19Y3iZmlre2d3r7x/0JZxKghtkZjHoutjSTmLaEsxxWk3ERSHPqcdf3yd+50JFZLF0Z2aJtQN8TBiASNYaambeOgMTjzklSuW6Vwix3GgZVo1u25Xc4Ls85oNkWnNUQFLNL3ye38QkzSkkSIcS9lDVqLcDAvFCKezUj+VNMFkjIe0p2mEQyrdbH7vDJ5oZQCDWOiKFJyr3ycyHEo5DX3dGWI1kr+9XPzL66UquHAzFiWpohFZLApSDlUM8+fhgAlKFJ9qgolg+lZIRlhgonREJR3C16fwf9KumqhmVm/tSuNqGUcRHIFjcAoQqIMGuAFN0AIEcPAAnsCzcW88Gi/G66K1YCxnDsEPGG+fKIGPZw==</latexit>p0,v0
+<latexit sha1_base64="DfDRPHKdXhCgpyjOiVZs9kXJZNg=">AAAB73icdVDLSsNAFJ3UV62vqks3g0VwIWHSxlR3RTcuK9gHtCFMppN26OThzKRQQn/CjQtF3Po77vwbJ20FFT1w4XDOvdx7j59wJhVCH0ZhZXVtfaO4Wdra3tndK+8ftGWcCkJbJOax6PpYUs4i2lJMcdpNBMWhz2nHH1/nfmdChWRxdKemCXVDPIxYwAhWWuomHjqDEw955QoynUvLcRyITFSz63Y1J5Z9XrOhZaI5KmCJpld+7w9ikoY0UoRjKXsWSpSbYaEY4XRW6qeSJpiM8ZD2NI1wSKWbze+dwROtDGAQC12RgnP1+0SGQymnoa87Q6xG8reXi395vVQFF27GoiRVNCKLRUHKoYph/jwcMEGJ4lNNMBFM3wrJCAtMlI6opEP4+hT+T9pV06qZ1Vu70rhaxlEER+AYnAIL1EED3IAmaAECOHgAT+DZuDcejRfjddFaMJYzh+AHjLdPJXSPZQ==</latexit>s0
+<latexit sha1_base64="2KOu0lpeWX3ScPVb/CzHaSwiA4c=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2ls120y7dbMLuRCihP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXFtRKwecJxwP6IDJULBKFrp3jy6vVLZrbgzkGXi5aQMOeq90le3H7M04gqZpMZ0PDdBP6MaBZN8UuymhieUjeiAdyxVNOLGz2anTsipVfokjLUthWSm/p7IaGTMOApsZ0RxaBa9qfif10kxvPIzoZIUuWLzRWEqCcZk+jfpC80ZyrEllGlhbyVsSDVlaNMp2hC8xZeXSbNa8c4r1buLcu06j6MAx3ACZ+DBJdTgFurQAAYDeIZXeHOk8+K8Ox/z1hUnnzmCP3A+fwACV42d</latexit>s1
+<latexit sha1_base64="6AmdTtYC1OPmNI5r27GUQ/bjoU4=">AAAB63icbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0sWy2k3bp7ibsboRS+he8eFDEq3/Im//GpM1BWx8MPN6bYWZeEAturOt+O4W19Y3NreJ2aWd3b/+gfHjUMlGiGTZZJCLdCahBwRU2LbcCO7FGKgOB7WB8m/ntJ9SGR+rBTmL0JR0qHnJGbSaZR6/UL1fcqjsHWSVeTiqQo9Evf/UGEUskKssENabrubH1p1RbzgTOSr3EYEzZmA6xm1JFJRp/Or91Rs5SZUDCSKelLJmrvyemVBozkUHaKakdmWUvE//zuokNr/0pV3FiUbHFojARxEYke5wMuEZmxSQllGme3krYiGrKbBpPFoK3/PIqadWq3kW1dn9Zqd/kcRThBE7hHDy4gjrcQQOawGAEz/AKb450Xpx352PRWnDymWP4A+fzBzjtjbI=</latexit>s2
+<latexit sha1_base64="o/IINX6XlLfYAxBVSEM+QiOSyms=">AAAB7HicbVBNS8NAEJ3Urxq/qh69LBbBU0mqoMeiF48VTFtoY9lsN+3SzSbsboQS+hu8eFDEqz/Im//GTZqDtj4YeLw3w8y8IOFMacf5tipr6xubW9Vte2d3b/+gdnjUUXEqCfVIzGPZC7CinAnqaaY57SWS4ijgtBtMb3O/+0SlYrF40LOE+hEeCxYygrWRPPXYtO1hre40nAJolbglqUOJ9rD2NRjFJI2o0IRjpfquk2g/w1IzwuncHqSKJphM8Zj2DRU4osrPimPn6MwoIxTG0pTQqFB/T2Q4UmoWBaYzwnqilr1c/M/rpzq89jMmklRTQRaLwpQjHaP8czRikhLNZ4ZgIpm5FZEJlphok08egrv88irpNBvuRaN5f1lv3ZRxVOEETuEcXLiCFtxBGzwgwOAZXuHNEtaL9W59LForVjlzDH9gff4Ab5GNxw==</latexit>⇡
+<latexit sha1_base64="Hn8FOfz+2/aYwPpZpUiApxbMf1o=">AAAB6nicdVBNS8NAEJ34WetX1aOXxSJ4CklbTL0VvXisaD+gDWWz3bRLN5uwuxFK6E/w4kERr/4ib/4bt00FFX0w8Hhvhpl5QcKZ0o7zYa2srq1vbBa2its7u3v7pYPDtopTSWiLxDyW3QArypmgLc00p91EUhwFnHaCydXc79xTqVgs7vQ0oX6ER4KFjGBtpNt+wgalsmPXPPfCqaKceF5O6t45cm1ngTIs0RyU3vvDmKQRFZpwrFTPdRLtZ1hqRjidFfupogkmEzyiPUMFjqjys8WpM3RqlCEKY2lKaLRQv09kOFJqGgWmM8J6rH57c/Evr5fqsO5nTCSppoLki8KUIx2j+d9oyCQlmk8NwUQycysiYywx0Sadognh61P0P2lXbLdqV25q5cblMo4CHMMJnIELHjTgGprQAgIjeIAneLa49Wi9WK9564q1nDmCH7DePgHV1Y4t</latexit>h<latexit sha1_base64="0jw52b3lIgRHORCtWi8eNziIsk4=">AAAB6HicdVDLSgMxFM3UV62vqks3wSK4GjLT0ba7ohuXLdgHtEPJpJk2NpMZkoxQhn6BGxeKuPWT3Pk3pg9BRQ9cOJxzL/feEyScKY3Qh5VbW9/Y3MpvF3Z29/YPiodHbRWnktAWiXksuwFWlDNBW5ppTruJpDgKOO0Ek+u537mnUrFY3OppQv0IjwQLGcHaSM3xoFhCtotqyKtAZJcvLqueZ0jFqblGcWy0QAms0BgU3/vDmKQRFZpwrFTPQYn2Myw1I5zOCv1U0QSTCR7RnqECR1T52eLQGTwzyhCGsTQlNFyo3ycyHCk1jQLTGWE9Vr+9ufiX10t1WPUzJpJUU0GWi8KUQx3D+ddwyCQlmk8NwUQycyskYywx0Sabggnh61P4P2m7tlO23aZXql+t4siDE3AKzoEDKqAObkADtAABFDyAJ/Bs3VmP1ov1umzNWauZY/AD1tsnRaqNQg==</latexit>
+h BERT & GRU
+<latexit sha1_base64="t+5GSlH3YugTI8sCd3Gl03DI8N0=">AAAB/3icdVDLSgNBEJyNrxhfUcGLl8GgeHHZTaJJbiEieowhiUISwuxk1gzOPpjpFcOag7/ixYMiXv0Nb/6Nk4egogUNRVU33V1OKLgCy/owEjOzc/MLycXU0vLK6lp6faOpgkhS1qCBCOSlQxQT3GcN4CDYZSgZ8RzBLpzr45F/ccOk4oFfh0HIOh658rnLKQEtddNbfXyA28BuIa6c1Oq4vYdPa41hN52xzKxVsvIFbJm5w6NiPq9JwS5ltWKb1hgZNEW1m35v9wIaecwHKohSLdsKoRMTCZwKNky1I8VCQq/JFWtp6hOPqU48vn+Id7XSw24gdfmAx+r3iZh4Sg08R3d6BPrqtzcS//JaEbjFTsz9MALm08kiNxIYAjwKA/e4ZBTEQBNCJde3YtonklDQkaV0CF+f4v9JM2vaOTN7ns+UK9M4kmgb7aB9ZKMCKqMzVEUNRNEdekBP6Nm4Nx6NF+N10powpjOb6AeMt0+8m5So</latexit>f<latexit sha1_base64="7vlF0RJn4w84MT4kp6d6HfqkD7M=">AAAB6HicdVDLSsNAFL3xWeur6tLNYBFchaSNqe6Kbly2YB/QhjKZTtqxkwczE6GEfoEbF4q49ZPc+TdO2goqeuDC4Zx7ufceP+FMKsv6MFZW19Y3Ngtbxe2d3b390sFhW8apILRFYh6Lro8l5SyiLcUUp91EUBz6nHb8yXXud+6pkCyObtU0oV6IRxELGMFKS81gUCpbpntpu66LLNOqOjWnkhPbOa86yDatOcqwRGNQeu8PY5KGNFKEYyl7tpUoL8NCMcLprNhPJU0wmeAR7Wka4ZBKL5sfOkOnWhmiIBa6IoXm6veJDIdSTkNfd4ZYjeVvLxf/8nqpCi68jEVJqmhEFouClCMVo/xrNGSCEsWnmmAimL4VkTEWmCidTVGH8PUp+p+0K6ZdNStNp1y/WsZRgGM4gTOwoQZ1uIEGtIAAhQd4gmfjzng0XozXReuKsZw5gh8w3j4BM5WNNQ==</latexit>
+f MLP
+<latexit sha1_base64="it5FEgc7j9dBBQnoqxvrgIEMqag=">AAAB9XicdVDLSgNBEJyNrxhfUY9eBoPgxWU3WTd6C3rxoBDBJEISw+xkNhky+2CmVw1L/sOLB0W8+i/e/BsnD0FFCxqKqm66u7xYcAWW9WFk5uYXFpeyy7mV1bX1jfzmVl1FiaSsRiMRyWuPKCZ4yGrAQbDrWDISeII1vMHp2G/cMql4FF7BMGbtgPRC7nNKQEs3Pj7ALWD3kF6cV0edfMEy3WPbdV1smVbJKTvFMbGdw5KDbdOaoIBmqHby761uRJOAhUAFUappWzG0UyKBU8FGuVaiWEzogPRYU9OQBEy108nVI7ynlS72I6krBDxRv0+kJFBqGHi6MyDQV7+9sfiX10zAP2qnPIwTYCGdLvITgSHC4whwl0tGQQw1IVRyfSumfSIJBR1UTofw9Sn+n9SLpl0yi5dOoXIyiyOLdtAu2kc2KqMKOkNVVEMUSfSAntCzcWc8Gi/G67Q1Y8xmttEPGG+f6MSSJg==</latexit>g
+<latexit sha1_base64="maoQxtH7pYqpPJ94K5V0L7rHrXY=">AAAB6HicdVDJSgNBEK2JW4xb1KOXxiB4GnomwSS3oBePCZgFkiH0dHqS1p6F7h4hDPkCLx4U8eonefNv7CyCij4oeLxXRVU9PxFcaYw/rNza+sbmVn67sLO7t39QPDzqqDiVlLVpLGLZ84ligkesrbkWrJdIRkJfsK5/dzX3u/dMKh5HN3qaMC8k44gHnBJtpNZ4WCxhG1cr9WodYbtSxjXsGuK65TK+QI6NFyjBCs1h8X0wimkaskhTQZTqOzjRXkak5lSwWWGQKpYQekfGrG9oREKmvGxx6AydGWWEgliaijRaqN8nMhIqNQ190xkSPVG/vbn4l9dPdVDzMh4lqWYRXS4KUoF0jOZfoxGXjGoxNYRQyc2tiE6IJFSbbAomhK9P0f+k49pO2XZblVLjchVHHk7gFM7BgSo04Bqa0AYKDB7gCZ6tW+vRerFel605azVzDD9gvX0CMkiNNA==</latexit>r1
+<latexit sha1_base64="29/L9k/R8taJosbck0IKsPduPpw=">AAAB6nicdVDLSgNBEOyNrxhfUY9eBoPgaZndBJPcgl48RjSJkKxhdjKbDJl9MDMrhCWf4MWDIl79Im/+jZOHoKIFDUVVN91dfiK40hh/WLmV1bX1jfxmYWt7Z3evuH/QVnEqKWvRWMTy1ieKCR6xluZasNtEMhL6gnX88cXM79wzqXgc3ehJwryQDCMecEq0ka7lndMvlrCNq5V6tY6wXSnjGnYNcd1yGZ8hx8ZzlGCJZr/43hvENA1ZpKkgSnUdnGgvI1JzKti00EsVSwgdkyHrGhqRkCkvm586RSdGGaAglqYijebq94mMhEpNQt90hkSP1G9vJv7ldVMd1LyMR0mqWUQXi4JUIB2j2d9owCWjWkwMIVRycyuiIyIJ1Sadggnh61P0P2m7tlO23atKqXG+jCMPR3AMp+BAFRpwCU1oAYUhPMATPFvCerRerNdFa85azhzCD1hvn2bLjeI=</latexit>r2
+<latexit sha1_base64="BIqZJSBdw/UVj0WMxUNtj3DVEtg=">AAAB6nicdVDLSgNBEOyNrxhfUY9eBoPgaZndBJPcgl48RjSJkKxhdjKbDJl9MDMrhCWf4MWDIl79Im/+jZOHoKIFDUVVN91dfiK40hh/WLmV1bX1jfxmYWt7Z3evuH/QVnEqKWvRWMTy1ieKCR6xluZasNtEMhL6gnX88cXM79wzqXgc3ehJwryQDCMecEq0ka7lndsvlrCNq5V6tY6wXSnjGnYNcd1yGZ8hx8ZzlGCJZr/43hvENA1ZpKkgSnUdnGgvI1JzKti00EsVSwgdkyHrGhqRkCkvm586RSdGGaAglqYijebq94mMhEpNQt90hkSP1G9vJv7ldVMd1LyMR0mqWUQXi4JUIB2j2d9owCWjWkwMIVRycyuiIyIJ1Sadggnh61P0P2m7tlO23atKqXG+jCMPR3AMp+BAFRpwCU1oAYUhPMATPFvCerRerNdFa85azhzCD1hvn2hPjeM=</latexit>g LSTM
+<latexit sha1_base64="ZZZdqCh7cuUGeibdQjuQhrslnog=">AAAB+HicdVBNS0JBFJ1nX2YfWi3bDEnQpsf4lNSd1KZFgZGaoCLzxlEH530wc19kD39JmxZFtO2ntOvfNH4EFXXgwuGce7n3HjeUQgMhH1ZiaXlldS25ntrY3NpOZ3Z2GzqIFON1FshANV2quRQ+r4MAyZuh4tRzJb9xR2dT/+aWKy0CvwbjkHc8OvBFXzAKRupm0gN8jNvA7yC+uK5dTrqZLLFJsVAuljGxC3lSIo4hjpPPkxOcs8kMWbRAtZt5b/cCFnncByap1q0cCaETUwWCST5JtSPNQ8pGdMBbhvrU47oTzw6f4EOj9HA/UKZ8wDP1+0RMPa3Hnms6PQpD/dubin95rQj6pU4s/DAC7rP5on4kMQR4mgLuCcUZyLEhlClhbsVsSBVlYLJKmRC+PsX/k4Zj5/K2c1XIVk4XcSTRPjpARyiHiqiCzlEV1RFDEXpAT+jZurcerRfrdd6asBYze+gHrLdPDPCStw==</latexit>f<latexit sha1_base64="7vlF0RJn4w84MT4kp6d6HfqkD7M=">AAAB6HicdVDLSsNAFL3xWeur6tLNYBFchaSNqe6Kbly2YB/QhjKZTtqxkwczE6GEfoEbF4q49ZPc+TdO2goqeuDC4Zx7ufceP+FMKsv6MFZW19Y3Ngtbxe2d3b390sFhW8apILRFYh6Lro8l5SyiLcUUp91EUBz6nHb8yXXud+6pkCyObtU0oV6IRxELGMFKS81gUCpbpntpu66LLNOqOjWnkhPbOa86yDatOcqwRGNQeu8PY5KGNFKEYyl7tpUoL8NCMcLprNhPJU0wmeAR7Wka4ZBKL5sfOkOnWhmiIBa6IoXm6veJDIdSTkNfd4ZYjeVvLxf/8nqpCi68jEVJqmhEFouClCMVo/xrNGSCEsWnmmAimL4VkTEWmCidTVGH8PUp+p+0K6ZdNStNp1y/WsZRgGM4gTOwoQZ1uIEGtIAAhQd4gmfjzng0XozXReuKsZw5gh8w3j4BM5WNNQ==</latexit>p1,v1
+<latexit sha1_base64="jlVfM0mDP+5A56MqRCPIGI/Iq+E=">AAAB73icdVDLSsNAFJ3UV62vqks3g0VwISHTxlR3RTcuK9gHtCFMppN26OThzKRQQn/CjQtF3Po77vwbJ20FFT1w4XDOvdx7j59wJpVlfRiFldW19Y3iZmlre2d3r7x/0JZxKghtkZjHoutjSTmLaEsxxWk3ERSHPqcdf3yd+50JFZLF0Z2aJtQN8TBiASNYaambeOgMTjzklSuW6Vwix3GgZVo1u25Xc4Ls85oNkWnNUQFLNL3ye38QkzSkkSIcS9lDVqLcDAvFCKezUj+VNMFkjIe0p2mEQyrdbH7vDJ5oZQCDWOiKFJyr3ycyHEo5DX3dGWI1kr+9XPzL66UquHAzFiWpohFZLApSDlUM8+fhgAlKFJ9qgolg+lZIRlhgonREJR3C16fwf9KumqhmVm/tSuNqGUcRHIFjcAoQqIMGuAFN0AIEcPAAnsCzcW88Gi/G66K1YCxnDsEPGG+fKIGPZw==</latexit>g
+<latexit sha1_base64="maoQxtH7pYqpPJ94K5V0L7rHrXY=">AAAB6HicdVDJSgNBEK2JW4xb1KOXxiB4GnomwSS3oBePCZgFkiH0dHqS1p6F7h4hDPkCLx4U8eonefNv7CyCij4oeLxXRVU9PxFcaYw/rNza+sbmVn67sLO7t39QPDzqqDiVlLVpLGLZ84ligkesrbkWrJdIRkJfsK5/dzX3u/dMKh5HN3qaMC8k44gHnBJtpNZ4WCxhG1cr9WodYbtSxjXsGuK65TK+QI6NFyjBCs1h8X0wimkaskhTQZTqOzjRXkak5lSwWWGQKpYQekfGrG9oREKmvGxx6AydGWWEgliaijRaqN8nMhIqNQ190xkSPVG/vbn4l9dPdVDzMh4lqWYRXS4KUoF0jOZfoxGXjGoxNYRQyc2tiE6IJFSbbAomhK9P0f+k49pO2XZblVLjchVHHk7gFM7BgSo04Bqa0AYKDB7gCZ6tW+vRerFel605azVzDD9gvX0CMkiNNA==</latexit>Q)UQ
+<latexit sha1_base64="8zLrLkFXbUfUMTk+CT/81H95NRU=">AAACCHicdVDLSgNBEJyNrxhfqx49OBgET2E3CZjcgl48JmIekCxhdjJJhsw+mOlVw7JHL/6KFw+KePUTvPk3TrIRVLSgoajqprvLDQVXYFkfRmZpeWV1Lbue29jc2t4xd/daKogkZU0aiEB2XKKY4D5rAgfBOqFkxHMFa7uT85nfvmZS8cC/gmnIHI+MfD7klICW+uZhD9gtxI0E9y75aAxEyuAGp2ITN5K+mbcK5WKpapdwSipWSiqVKrYL1hx5tEC9b773BgGNPOYDFUSprm2F4MREAqeCJblepFhI6ISMWFdTn3hMOfH8kQQfa2WAh4HU5QOeq98nYuIpNfVc3ekRGKvf3kz8y+tGMKw4MffDCJhP00XDSGAI8CwVPOCSURBTTQiVXN+K6ZhIQkFnl9MhfH2K/yetYsEuFYqNcr52togjiw7QETpBNjpFNXSB6qiJKLpDD+gJPRv3xqPxYrymrRljMbOPfsB4+wR1yppF</latexit>U)Op Field W
+<latexit sha1_base64="oC/7txvfst7H8lVOpKpsf7Z4fKY=">AAACFHicdVDJSgNBEO2Je9yiHr00BkUQwkwSMLmJgnhzwZhAJoSeTiVp0rPQXaOGIR/hxV/x4kERrx68+Td2FkFFHxS8fq+KrnpeJIVG2/6wUlPTM7Nz8wvpxaXlldXM2vqVDmPFocJDGaqaxzRIEUAFBUqoRQqY70moer2joV+9BqVFGFxiP4KGzzqBaAvO0EjNzJ6LcItJZUB33AvR6SJTKryhrmveI+c0oscCZItWB81M1s4V84WyU6BjUrLHpFQqUydnj5AlE5w1M+9uK+SxDwFyybSuO3aEjYQpFFzCIO3GGiLGe6wDdUMD5oNuJKOjBnTbKC3aDpWpAOlI/T6RMF/rvu+ZTp9hV//2huJfXj3GdqmRiCCKEQI+/qgdS4ohHSZEW0IBR9k3hHElzK6Ud5liHE2OaRPC16X0f3KVzzmFXP68mD04nMQxTzbJFtklDtknB+SEnJEK4eSOPJAn8mzdW4/Wi/U6bk1Zk5kN8gPW2ydGf55Z</latexit>U)Op Field W
+<latexit sha1_base64="oC/7txvfst7H8lVOpKpsf7Z4fKY=">AAACFHicdVDJSgNBEO2Je9yiHr00BkUQwkwSMLmJgnhzwZhAJoSeTiVp0rPQXaOGIR/hxV/x4kERrx68+Td2FkFFHxS8fq+KrnpeJIVG2/6wUlPTM7Nz8wvpxaXlldXM2vqVDmPFocJDGaqaxzRIEUAFBUqoRQqY70moer2joV+9BqVFGFxiP4KGzzqBaAvO0EjNzJ6LcItJZUB33AvR6SJTKryhrmveI+c0oscCZItWB81M1s4V84WyU6BjUrLHpFQqUydnj5AlE5w1M+9uK+SxDwFyybSuO3aEjYQpFFzCIO3GGiLGe6wDdUMD5oNuJKOjBnTbKC3aDpWpAOlI/T6RMF/rvu+ZTp9hV//2huJfXj3GdqmRiCCKEQI+/qgdS4ohHSZEW0IBR9k3hHElzK6Ud5liHE2OaRPC16X0f3KVzzmFXP68mD04nMQxTzbJFtklDtknB+SEnJEK4eSOPJAn8mzdW4/Wi/U6bk1Zk5kN8gPW2ydGf55Z</latexit>at+1
+<latexit sha1_base64="oGnwLT1UKbU5kPL24Jb88ys+J+M=">AAAB7nicbVBNS8NAEJ3Ur1q/qh69LBZBEEpSBT0WvXisYD+gDWWz3bRLN5uwOxFK6I/w4kERr/4eb/4bt20O2vpg4PHeDDPzgkQKg6777RTW1jc2t4rbpZ3dvf2D8uFRy8SpZrzJYhnrTkANl0LxJgqUvJNoTqNA8nYwvpv57SeujYjVI04S7kd0qEQoGEUrtWk/wwtv2i9X3Ko7B1klXk4qkKPRL3/1BjFLI66QSWpM13MT9DOqUTDJp6VeanhC2ZgOeddSRSNu/Gx+7pScWWVAwljbUkjm6u+JjEbGTKLAdkYUR2bZm4n/ed0Uwxs/EypJkSu2WBSmkmBMZr+TgdCcoZxYQpkW9lbCRlRThjahkg3BW355lbRqVe+yWnu4qtRv8ziKcAKncA4eXEMd7qEBTWAwhmd4hTcncV6cd+dj0Vpw8plj+APn8wftaY9M</latexit>(b) The MuZero MCTS with grammar-
+guided node expansions represented as
+edge labelled with CFG rules.
+Figure A.3
+Figure A.3a lists the detailed rules schemata for the query grammar used by the MuZero agent – explained
+in Section 3.2.1. An optional STOP rule allows the agent to terminate an episode and return the results
+collected up to that point. Using the BERT sub-word tokens as vocabulary allows us to generate a large
+number of words with a total vocabulary size of ∼30k tokens.
+30Published in Transactions on Machine Learning Research (06/2022)
+Our implementation of MuZero modiﬁes the MCTS to use the query grammar for eﬃcient exploration.
+Figure A.3b shows the diﬀerent network components used during MCTS. Each node expansion is associated
+with a grammar rule. When the simulation phase is complete, the visit counts collected at the children of the
+MCTS root node provide the policy πfrom which the next action at+1is sampled.
+Each simulation corresponds to one or more hypothetical follow-up queries (or fragments) resulting from
+the execution of grammar rules. The MCTS procedure executes Depth-First node expansions, guided by
+the grammar, to generate a query top-down, left-to-right, in a forward pass. To control the process, we
+add two data structures to MCTS nodes: a stack γ, and an output buﬀer ω:γcontains a list of unﬁnished
+non-terminals, ωstores the new expansion. The stack is initialized with the start symbol γ= [Q]. The output
+buﬀer is reset, ω= [], after each document search. When expanding a node, the non-terminal symbol on the
+top ofγis popped, providing the left-hand side of the rule associated with the new edge. Then, symbols on
+the right-hand side of the rule are pushed right-to-left onto γ. When a terminal rule is applied, the terminal
+symbol is added to ω. The next time γcontains only Q,ωholds the new query expansion term ∆qtto be
+appended to the previous query qtfor search.
+γ={Q},ω={}
+γ={U,Q},ω={}
+γ={Op,Field,W,Q},ω={}
+......U⇒Op Field Wγ={W,Q},ω={}
+γ={Wβ,Q},ω={}
+γ={Vβ,Wx,Q},ω={}
+γ={Wβ,Q},ω={dial}
+γ={Vβ,Q},ω={dial}
+γ={Q},ω={dialects}
+γ={W,Q},ω={}
+γ={Widx,Q},ω={}
+......W⇒WidxSEARCH Q⇒W QVβ⇒ectsWβ⇒VβVβ⇒dialWβ⇒VβWβW⇒WβQ⇒W Q
+Q⇒U Q
+Figure A.4
+Figure A.4 illustrates the process. Nodes represent the stack γand output buﬀer ω. Edges are annotated
+with the rule used to expand the node. We illustrate the left-branching expansion. Starting from the top,
+the symbol " Q" is popped from the stack, and a compatible rule, " Q⇒W Q", is sampled. The symbols " W"
+and " Q" are added to the stack for later processing. The agent expands the next node choosing to use the
+document content vocabulary ( W⇒Wβ), then it selects a vocabulary preﬁx (‘dial’), adding it to the output
+buﬀerω, followed by a vocabulary suﬃx (‘ects’). At that point, the stack contains only Q, and the content
+ofωcontains a new expansion, the term ‘dialects’. A latent search step is simulated through MuZero’s gθ
+sub-network. Then the output buﬀer ωis reset.
+31Published in Transactions on Machine Learning Research (06/2022)
+After the latent search step, the simulation is forced to use the full trie ( W⇒Widx), which includes all terms
+in the Lucene index. This is necessary since there is no observable context that can be used to restrict the
+vocabulary. Instead of simply adding an OR term ( Q⇒W Q), the right branch of the example selects an
+expansion with unary operator and ﬁeld information ( Q⇒U Q).
+G Search Session Examples
+Table A.9 and Table A.10 show example Rocchio sessions using the full grammar. Table A.11 shows a session
+generated by the MuZero agent.
+Table A.9: Example episode from a Rocchio session with grammar G4 (Rocchio-G4). The question asks
+for the name of the “green guy from sesame street” (referring to ‘‘Oscar the Grouch”, a green muppetthat
+lives in a trashcan on Sesame street). The query expansions add the requirement that the content of the
+documents should contain the words “muppet”, and “trash”; both terms closely related to the answer “Oscar
+the Grouch” but not mentioned in the original query. The score increases from 0.040 for the original query to
+0.891 for the ﬁnal query.
+Query and Search Results Score
+q0who is the green guy from sesame street
+Top-2 documents retrieved with q0: 0.040
+d1Title Music of Sesame Street
+Content ...Christopher Cerf , who Gikow called "the go-to guy on "Sesame Street" for classic
+rock and roll as well as song spoofs ...
+d2Title Sesame Street characters
+Content ...Forgetful Jones , a "simpleton cowboy" with a short-term memory disorder; and
+even Kermit the Frog, the ﬂagship character of The Muppets. ...
+q1who is the green guy from sesame street +(contents:“muppet”)
+Top-2 documents retrieved with q1: 0.505
+d1Title History of Sesame Street
+Content ...Raposo’s "I Love Trash", written for ... Oscar the Grouch , was included on the
+ﬁrst album of "Sesame Street" songs, ...
+d2Title Julie on Sesame Street)
+Content ...Andrews and "special guest star" Como interacted with the Muppet characters
+(including Kermit the Frog, Big Bird, Cookie Monster, ... Oscar the Grouch and Bert
+and Ernie), ...
+q2who is the green guy from sesame street +(contents:“muppet”) +(contents:“trash”)
+Top-2 documents retrieved with q2: 0.891
+d1Title A Muppet Family Christmas
+Content ...all the Muppets sing a medley of carols and swap presents (except OscartheGrouch ,
+who just sits in his trash can, sighing very miserably due to his hatred for Christmas).
+...
+d2Title Music of Sesame Street
+Content ...He wrote "I Love Trash" for Oscar the Grouch , which was included on the ﬁrst
+album of "Sesame Street" songs. ...
+32Published in Transactions on Machine Learning Research (06/2022)
+Table A.10: Example of a Rocchio session with grammar G4 (all terms).
+Query and Search Results Score
+q0who were the judges on the x factor 0.043
+d1Title The X Factor (Australian TV series)
+Content ...After "The X Factor" was revived for a second season in 2010, Natalie Garonzi
+became the new host of "The Xtra Factor" on ...
+d2Title X Factor (Icelandic TV series)
+Content ...The judges were the talent agent and businessman Einar Bárðarson, rock
+musicianElínborg Halldórsdóttir and pop singer Paul Oscar ...
+q1who were the judges on the x factor (contents:“conﬁrmed” ∧4) 0.551
+d1Title The X Factor (U.S. season 2)
+Content ...Simon Cowell and L.A. Reid returned as judges, while Paula Abdul and Nicole
+Scherzinger were replaced ...
+d2Title The X Factor (New Zealand series 1)
+Content ..."The X Factor" was created by Simon Cowell in the United Kingdom and the
+New Zealand version is based on ...
+q2who were the judges on the x factor (contents:“conﬁrmed” ∧4) (title:“2”∧8) 0.678
+d4Title The X Factor (U.S. season 2)
+Content ...It was also reported that Cowell was in talks with Britney Spears for her to
+join the show, ...
+d5Title H.F.M. 2 (The Hunger for More 2)
+Content ...Conﬁrmed guests include Eminem, Kanye West , Lloyd, Juelz Santana, 50
+Cent, Styles P, ...
+q3who were the judges on the x factor (contents:“conﬁrmed” ∧4) (title:“2”∧8) +(con-
+tents:“britney”)0.804
+d3Title The X Factor (U.S. TV series)
+Content ...Reid, former "The X Factor" judge Cheryl Cole, and Cowell’s former "American
+Idol" colleague Paula Abdul were conﬁrmed to join Cowell in the judging panel
+...
+d5Title The X Factor (U.S. season 2)
+Content ...It was also reported that Cowell was in talks with Britney Spears for her to
+join the show, ...
+q4who were the judges on the x factor (contents:“conﬁrmed” ∧4) (title:“2”∧8) +(con-
+tents:“britney”) (contents:“cowell” ∧4)0.926
+d1Title The X Factor (U.S. season 2) (BM25 Rank: 15)
+Content ...Simon Cowell and L.A. Reid returned as judges, while Paula Abdul and Nicole
+Scherzinger were replaced ...
+d2Title The X Factor (New Zealand series 1) (BM25 Rank: 195)
+Content ..."The X Factor" was created by Simon Cowell in the United Kingdom and the
+New Zealand version is based on ...
+d3Title Louis Walsh (BM25 Rank: >1000)
+Content ...He joined the other season two judges: L.A. Reid, Demi Lovato and Britney
+Spears, and was introduced with the line, ...
+d4Title The X Factor (U.S. TV series) (BM25 Rank: 206)
+Content ...Reid, former "The X Factor" judge Cheryl Cole, and Cowell’s former "American
+Idol" colleague Paula Abdul were conﬁrmed to join Cowell in the judging panel
+...
+d5Title Simon Cowell (BM25 Rank: >1000)
+Content ...Cowell and Reid returned for season 2, while Demi Lovato and Britney Spears
+joined the judging panel as replacements for Abdul and Scherzinger ...
+33Published in Transactions on Machine Learning Research (06/2022)
+Table A.11: Example of a MuZero agent search session.
+Query and Search Results Score
+q0who won the wwe money in the bank 0.071
+d1Title Money in the Bank (2017)
+Contents ...In the main event, Baron Corbin won the men’s ladder match, earning a contract
+for a WWE Championship match, while Carmella controversially won the ﬁrst
+women’s ladder match to earn a SmackDown Women’s Championship match
+contract ...
+q1who won the wwe money in the bank (contents:“jinder” ∧2) 0.130
+d1Title Money in the Bank ladder match
+Contents ...For the traditional ladder match, which had a contract for a match for Smack-
+Down’s WWE Championship, SmackDown Commissioner Shane McMahon an-
+nounced AJ Styles, Shinsuke Nakamura, Dolph Ziggler, Sami Zayn, and Baron
+Corbin as the original ﬁve participants ...
+q4who won the wwe money in the bank (contents:“jinder” ∧2) (contents:“dolph” ∧2)
+(contents:“won” ∧2) (contents:“zayn” ∧2)0.414
+d1Title Money in the Bank (2018)
+Contents ...At Backlash, Lashley and Braun Strowman defeated Kevin Owens and Sami
+Zayn. During an interview on the May 7 episode, Lashley spoke ...
+q5who won the wwe money in the bank (contents:“jinder” ∧2) (contents:“dolph” ∧2)
+(contents:“won” ∧2) (contents:“zayn” ∧2) (contents:“strowman” ∧2)0.587
+d2Title Kevin Owens
+Contents ...Later that night, Owens teaming up with Zayn, The Miz, Curtis Axel and Bo
+Dallas and lost to Finn Bálor, Seth Rollins, Braun Strowman , Bobby Lashley
+and Bobby Roode in a 10-man tag team match ...
+q7who won the wwe money in the bank (contents:“jinder” ∧2) (contents:“dolph” ∧2)
+(contents:“won” ∧2) (contents:“zayn” ∧2) (contents:“strowman” ∧2) (contents:“ﬁrst” ∧2)
+(contents:“roode” ∧2)0.848
+d1Title Bobby Lashley (BM25 Rank: >1000)
+Contents ...Lashley participated in the Greatest Royal Rumble at the namesake event,
+entering at #44 and scoring two eliminations, but was eliminated by Braun
+Strowman . The ﬁrst month of Lashley’s return would see him in a number of
+tag-team matches, ...
+d2Title Kevin Owens and Sami Zayn (BM25 Rank: >1000)
+Contents ...Later that night, Owens teaming up with Zayn, The Miz, Curtis Axel and Bo
+Dallas and lost to Finn Bálor, Seth Rollins, Braun Strowman , Bobby Lashley
+and Bobby Roode in a 10-man tag team match ...
+d3Title Money in the Bank (2018) (BM25 Rank: 282)
+Contents ...At Backlash, Lashley and Braun Strowman defeated Kevin Owens and Sami
+Zayn. During an interview on the May 7 episode, Lashley spoke ...
+34

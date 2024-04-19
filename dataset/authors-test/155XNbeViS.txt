@@ -1,0 +1,1954 @@
+Under review as submission to TMLR
+Settling the Communication Complexity for Distributed
+Offline Reinforcement Learning
+Anonymous authors
+Paper under double-blind review
+Abstract
+Westudyanovelsettinginofflinereinforcementlearning(RL)whereanumberofdistributed
+machines jointly cooperate to solve the problem but only one single round of communication
+is allowed and there is a budget constraint on the total number of information (in terms of
+bits) that each machine can send out. For value function prediction in contextual bandits,
+and both episodic and non-episodic MDPs, we establish information-theoretic lower bounds
+on the minimax risk for distributed statistical estimators; this reveals the minimum amount
+of communication required by any offline RL algorithms. Specifically, for contextual ban-
+dits, we show that the number of bits must scale at least as Ω(𝐴𝐶)to match the centralised
+minimax optimal rate, where 𝐴is the number of actions and 𝐶is the context dimension;
+meanwhile, we reach similar results in the MDP settings. Furthermore, we develop learning
+algorithms based on least-squares estimates and Monte-Carlo return estimates and provide
+a sharp analysis showing that they can achieve optimal risk up to logarithmic factors. Ad-
+ditionally, we also show that temporal difference is unable to efficiently utilise information
+from all available devices under the single-round communication setting due to the initial
+bias of this method. To our best knowledge, this paper presents the first minimax lower
+bounds for distributed offline RL problems.
+1 Introduction
+In this paper, we study a problem setting where each device can only send one message to the central server
+and the number of information in terms of bits is constrained by a communication budget . After that one
+transmission, no further communication is allowed; this setting models the situation where each device has
+a limited connection to the central server. Examples of this problem are ubiqutous in the field of electronic
+wearables and IoT devices, which are often low-powered and have limited access to internet. In such cases,
+connection with global server is rare and can be effectively modelled as a one-shot. If one wants to use
+Reinforcement learning approaches on such devices, each device would require access to large amounts of
+past experiences to efficiently solve the task. Fortunately, if one combines the data gathered on all devices
+in some region, within this collective experience we are likely to have explored enough of the environment
+to achieve acceptable performance. However, to utilise the data from other devices the RL algorithm needs
+to be able to communicate efficiently with other devices and learn from this collective experience in an
+offline manner. It is expected that enforcing restrictions on the available communication will decrease the
+overall performance for a given task. Yet, the research questions of how does the best possible performance
+depend on the communication budget, and how does existing offline RL algorithms perform have never been
+answered.
+In this paper, we attempt to answer the above questions by studying distributed offline RL problems. Our
+proof methods are based on reducing RL problems to statistical inference problems. After such reduction is
+done we utilise framework developed by Zhang et al. (2013), which ties minimax risk to mutual information
+of parameter and message sent. Intuitively, if a message carries little information about a certain parameter,
+it will be difficult for the central server to perform accurate inference based on that message only. We thus
+bound the mutual information to derive a lower bound on the risk any one-shot communication algorithm
+must suffer. Under our setting, we start with the classical multi-armed bandits problem in the contextual
+1Under review as submission to TMLR
+Problems Algorithms Optimal Risk Bits Communicated
+Parameter learning in LSE (Algorithm 1) O(𝐴𝐶𝑅2
+𝑚𝑛𝜆) Θ(𝐴𝐶log𝑚𝑛𝜆
+𝑅)
+linear contextual bandits Lower Bound Ω(𝐴𝐶𝑅2
+𝑚𝑛𝜆) Ω(𝐴𝐶)
+Value function prediction MC LSE (Algorithm 2) O(𝐶𝐻2𝑅2
+𝑚𝑆𝐸𝜆) Θ(𝐶log𝑚𝑆𝐸𝜆
+𝐻𝑅)
+(Episodic MDP) Lower Bound Ω(𝐶𝐻2𝑅2
+𝑆𝐸𝑚𝜆) Ω(𝐶
+log𝑚)
+Value function prediction TD (Algorithm 3) O(𝜈
+1+(1−𝛾)2𝑛) Θ(𝐶log𝐶
+𝜈)
+(Non-Episodic MDP) Lower Bound Ω(𝐶𝑅2
+(1−𝛾)2𝑚𝑆𝑛𝜋 max𝜆)Ω(𝐶
+log𝑚)
+Table 1: Summary of main results. 𝐴denotes the cardinality action space, 𝑆card. of state space, 𝐶is
+the dimensionality of context/feature vectors, 𝑚is the number of cooperating machines, 𝑛is the number of
+samples,𝐸number of episodes, 𝜆is the smallest rescaled eigenvalue of the feature/context covariance matrix,
+𝐻is the horizon length, 𝛾denotes the discount factor. For the stationary distribution of states visited in
+non-episodic MDP 𝜋, we assume that 𝜋max≥𝜋(𝑠)≥𝜋min. We define 𝜈=max{𝑅2
+𝑆𝜋min𝜆𝑚,∥θ−1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+0∥2
+2},
+where the second argument of max operator is the initial bias of TD method.
+case, where we derive a lower bound on the risk of𝐴𝐶𝑅2
+𝑚𝑛𝜆when the communication budget scales at least as
+𝐴𝐶, where𝐴and𝐶are number of actions and dimensions of context respectively, 𝑅is the maximum reward,
+𝑚and𝑛are numbers of machines and samples for each action and 𝜆is the rescaled smallest eigenvalue
+of the covariance matrix of context/feature vectors. We also present Algorithm 1 achieving optimal risk
+with communication budget being optimal up to logarithmic factors. Existing analyses of communication in
+multi-armed bandits problems (Wang et al. (2019), Huang et al. (2021)) define the communication cost as
+the number of values transmitted rather than the number of bits, which unfortunately ignores the fact that
+real communication can only occur with finite precision.
+Apart from the bandits problem, we also analyse problem settings for Markov Decision Processes (MDPs)
+and develop lower bounds for both episodic and non-episodic settings. To our best knowledge, we present
+the first minimax lower bounds for distributed solving of MDPs. In the episodic setting, we develop a lower
+bound of𝐶𝐻2𝑅2
+𝑚𝑆𝐸𝜆of risk with𝐶
+log𝑚communication budget, where 𝐻is horizon length, 𝑆is the cardinality
+of state space and 𝐸is the number of episodes we have for each state. We also prove that performing
+distributed Monte-Carlo return estimates achieve optimal risk with communication budget being optimal
+up to logarithmic factors. Additionally, we extend our results to the non-episodic cases and develop a lower
+bound of𝐶𝑅2
+(1−𝛾)2𝑚𝑆𝑛𝜋 max𝜆with communication budget𝐶
+log𝑚. Meanwhile, we also study the worst-case risk
+of distributed temporal difference in this setting and show that with only one communication round, the
+algorithm cannot efficiently utilise data stored on all machines due to its initial bias, i.e., the difference
+between the average initial estimate and the true parameter value ∥θ−1
+𝑚Í𝑚
+𝑖=1θ𝑖
+0∥2, which does not decrease
+with the number of machines.
+We summarise our theoretical results in Table 1 and our contributions are listed as follows:
+•We present information-theoretic lower bounds for distributed offline linear contextual bandits and
+linear value function prediction in Markov Decision Processes. Our lower bounds scale with the
+allowed communication budget 𝐵. To the best of the authors’ knowledge, these are the first lower
+bounds in distributed reinforcement learning other than for bandit problems.
+•We prove that a distributed version of the least-square estimate achieves optimal risk for the con-
+textual bandit problem and a distributed version of Monte-Carlo return estimates achieves optimal
+risk in episodic MDP. We show that both of these algorithms have communication budgets optimal
+up to logarithmic factors.
+•Weshowthattheperformanceofdistributedtemporaldifferenceinonecommunicationroundsetting
+does not improve when data from more machines is used if the initial bias is large
+2Under review as submission to TMLR
+2 Problem Formulation
+We assume there are 𝑚processing centres, and the 𝑖th centre stores gameplay history ℎ𝑖of an agent inter-
+acting with a particular environment within a framework of a Markov Decision Process. The distribution
+of gameplay histories 𝑃(ℎ)belongs to some wider family of distributions P, which is taken to be a set of
+all possible distributions that might have generated gameplay given that they satisfy assumptions of the
+problem. We assume there is some parameter of interest θ:P→Θembedded within that problem, which
+might be a property of solely the environment or a result of the agent’s actions. All centres are supposed
+to cooperate to jointly obtain an estimate ˆθ, closest to the true value θ. Based on its gameplay history ℎ𝑖,
+the𝑖th centre can send a message 𝑌𝑖to the main processing centre (arbitrary chosen), according to some
+communication protocol Π. There is only one communication round allowed, and the main centre cannot
+send any message back to individual centres. After receiving messages from all centres 𝑌1,...,𝑌𝑚the main
+centre outputs an estimate ˆθ(𝑌1,...,𝑌𝑚). We define the worst-case risk of that estimate in Definition 2.1.
+Definition 2.1 For a problem of estimating a parameter θ:P→Θ, we define the worst-case risk of an
+estimator ˆθunder communication protocol Πas
+𝑊(θ,P,ˆθ,Π)=sup
+𝑃∈P𝔼
+||ˆθ(𝑌1:𝑚)−θ(𝑃)||2
+2
+where the expectation is taken over possible gameplay ℎ𝑖histories generated by 𝑃and messages 𝑌1:𝑚sent by
+the protocol Πbased on them.
+We now consider the case when each message 𝑌𝑖is constrained so that its length in bits 𝐿𝑖is smaller than
+some communication budget 𝐵. We define 𝐴(𝐵)to be the family of communication protocols under which
+∀𝑖∈{1,...,𝑚}𝐿𝑖≤𝐵. We define the minimax risk as the best possible worst-case risk any algorithm can have
+as stated by Definition 2.2.
+Definition 2.2 For a class of problems where gameplay history is generated by a distribution 𝑝∈Pand we
+wish to estimate a parameter θ:P→Θ, under a communication budget of 𝐵we define the minimax risk to
+be:
+𝑀(θ,P,𝐵)=inf
+Π∈𝐴(𝐵)inf
+ˆ𝜃𝑊(θ,P,ˆθ,Π)=inf
+Π∈𝐴(𝐵)inf
+ˆ𝜃sup
+𝑃∈P𝔼
+||ˆθ(𝑌1:𝑚)−θ(𝑃)||2
+2
+where the second infimum is taken over all possible estimators.
+Notably, a similar definition was adopted by Zhang et al. (2013) in the setting of distributed statistical
+inference. The lower bounds we formulate are given in form of a hard instance of a problem. Formally,
+we show that there exists an instance such that any algorithm has a minimax risk at least equal to the
+bound we derive. We use a method described in Appendix A, which gives us a lower bound on minimax
+risk, provided we can obtain an upper bound of mutual information the messages sent by machines carry
+about the parameter 𝐼(𝑌,𝑉). To this goal, we rely on inequality stated in Appendix A.3, which requires us
+to construct a set such that if samples we receive fall into it, the likelihood ratio given different values of
+the parameter is bounded. If we can additionally bound the probability that the samples do not fall into
+this set, which in our proofs is done through the Hoeffding inequality, we obtain an upper bound on the
+information. Intuitively, if the likelihood ratio is small, it becomes hard to identify a parameter and if this
+also happens with large probability, then average information 𝐼(𝑌,𝑉)messages carry about the parameter
+must be small. We will now introduce the communication model assumed in this paper.
+2.1 Information Transmitted and Quantisation Precision
+In every algorithm we propose, we assume the following transmission model; we introduce quantisation
+levels separated by 𝑃, which we call the precision of quantisation. We assume the transmitted values are
+always within some pre-defined range (𝑉min,𝑉max), hence we divide it into𝑉max−𝑉min
+𝑃levels. Each value gets
+quantisedintothenearestlevelsothatthedifferencebetweentheoriginalvalueandthelevelintowhichitwas
+quantised is smallest. Under such a scheme, the number of bits transmitted is, therefore 𝐵=log
+𝑉max−𝑉min
+𝑃
+.
+We now proceed with the analysis of the first class of the distributed offline RL problems.
+3Under review as submission to TMLR
+3 Parameter estimation in contextual linear bandits
+In a classic multi-armed bandit problem, the agent is faced with a number of slot machines and is allowed
+to pull the arm of only one of them at a given timestep. We can identify choosing each arm with choosing
+an action𝑎∈A, where𝐴=|A|is the number of all arms. The reward obtained after each pull is stochastic
+and is sampled from a distribution that depends on the machine. We do not specify the distribution of the
+reward, but put a standard constraint on the maximum absolute value of rewards as stated by Assumption
+3.1, restricting its support to [−𝑅max,𝑅max].
+Assumption 3.1 The maximum absolute value of the reward an agent can receive at each timestep 𝑡is
+bounded by some constant 𝑅max>0, i.e.|𝑟𝑡|≤𝑅max.
+Hence, the goal in such a task is to identify the arm with the highest average reward. In the contextual
+version of this problem, at each time step, the agent is also given a context vector c𝑡∈ℝ𝐶, which influences
+the distribution of the reward for each arm. Consequently, an arm that is optimal under one context need
+not be optimal under a different context. We explicitly assume a linear structure between the context vector
+and average reward for each arm, i.e. 𝔼[𝑟𝑡|𝑎𝑡]=c𝑇
+𝑡θ𝑎𝑡, whereθ𝑎∈ℝ𝐶is the parameter vector for the
+arm associated with action 𝑎. We analyse the offline version of this problem where we have access to the
+gameplay history ℎ={c𝑙,𝑎𝑙,𝑟𝑙}𝑁
+𝑙=1, consisting of received context vectors, the arms agent have chosen in
+response to them and rewards obtained after pulling the arm. We assume that within gameplay history the
+agent has chosen each arm 𝑛times so that 𝑁=𝐴𝑛. We make a further assumption regarding the context
+vectors.
+Assumption 3.2 Context vector for each sample is normalised, i.e. ∥c𝑖∥2
+2≤1. If we form a matrix
+𝑋=(𝑐1,...,𝑐𝑛)for any number of context vectors 𝑛, then the smallest eigenvalue of the matrix 𝑋𝑇𝑋is𝜂min
+such that 0<𝜂min≤1and𝜂min=𝑛𝜆minfor some constant 𝜆min.
+Restricting the smallest eigenvalue is necessary as otherwise, the parameter θ𝑎becomes unidentifiable, as
+large changes in it will produce small changes in the average reward. Also, in practical problems, eigenvalues
+of the covariance matrix naturally grow with the number of samples and the condition that 𝜂min=𝑛𝜆min
+has been adopted by similar analyses (Zhang et al. (2013)). We would like to obtain an estimator for
+θ=(θ1,...,θ𝐴), which is a concatenated vector consisting of all parameter vectors for each 𝑎∈A. We
+now proceed with presenting the minimax lower bound for the estimation of θ. We assume the context
+vectors machines receive are pre-specified and the only randomness is within the reward. We now present
+our first lower bound on minimax risk in Theorem 3.3 and sketch its proof, describing a hard instance of the
+contextual linear bandit problem.
+Theorem 3.3 In a distributed offline linear contextual MAB problem with 𝐴actions and context with di-
+mensionality 𝐶such that𝐶𝐴 > 12under assumptions 3.1 and 3.2, given m processing centres each with
+𝑛≥𝐶samples for each arm, with each centre having communication budget 𝐵≥1, for any independent
+communication protocol, the minimax risk M is lower bounded as follows:
+𝑀≥Ω 
+𝐴𝐶𝑅2
+max
+𝑚𝑛𝜆 minmin(
+maxn𝐴𝐶
+𝐵,1o
+,𝑚)!
+Proof 3.4 (sketch): We present a sketch of proof here and defer the full proof to Appendix B.
+We construct a hard instance of the problem and use it to derive a lower bound. For each arm, at each centre
+we set the𝑘th component of context vector in 𝑙th sample to 𝑐𝑙
+𝑘=√𝜆min𝑛𝟙𝑘=𝑙for the first 𝐶and we set context
+vectors for remaining 𝑛−𝐶samples to zero vectors. Although this construction might seem pathological at
+first glance, it satisfies Assumption 3.2 and simplifies the analysis greatly. Under our construction we choose
+the distribution of the reward 𝑟𝑙
+𝑗for𝑙th sample for 𝑗th arm to be 𝑅maxwith prob.1
+2+𝑐𝑙
+𝑙𝜃𝑙
+𝑗
+2𝑅maxand−𝑅max
+otherwise. We can observe that the expected reward is 𝔼[𝑟𝑙
+𝑗]=𝑐𝑙
+𝑙𝜃𝑗,𝑙=(c𝑙)𝑇θ𝑗, which satisfies the problem
+formulation. The reward can also be rewritten as 𝑟𝑙
+𝑗=(2𝑝𝑙
+𝑗−1)𝑅max, where𝑝𝑙
+𝑗∼Bernoulli(1
+2+𝑐𝑙
+𝑘𝜃𝑗
+2𝑅max). Hence
+the data received can be just reduced to the Bernoulli variables {𝑝𝑙
+𝑗}𝑛
+𝑙=1for each arm 𝑗. We follow the method
+4Under review as submission to TMLR
+described in Appendix A. We study the likelihood ratio of 𝑝𝑙
+𝑗under𝑣𝑗,𝑘and𝑣′
+𝑗,𝑘=−𝑣𝑗,𝑘and show that it is
+bounded by expn
+17√𝑛𝜆min𝛿𝑣𝑘
+8𝑅maxo
+. We can thus satisfy the conditions of Lemma A.4, with 𝛼=17√𝑛𝜆min𝛿𝑣𝑘
+8𝑅max. We
+observe that since we haven’t assumed anything about 𝑝𝑙
+𝑗to derive this bound, we get that this bound holds
+with probability one and hence the second and third term in the bound resulting from Lemma A.4 are zero.
+For the Bernoulli distribution we can easily study the KL-divergence and together with Lemma A.2 we get
+that:𝐼(𝑉,𝑌)≤17
+8𝛿2𝑚𝑛𝜆 min
+𝑅2maxminn
+17
+8𝐵,𝐶𝐴
+2o
+. The rest of the proof consists of choosing such 𝛿that produces
+the tightest bound.
+We observe that for the communication not be a bottleneck, we require a communication budget for each
+machine of at least 𝐵>Ω(𝐴𝐶). We also see that above this optimal threshold, increasing the communication
+budget does not decrease the lower bound because of the max operator. On the other hand, for small
+communication budgets, the min operator ensures that the performance cannot be worse than as if we only
+used data from one machine. Both of these results are intuitive and show that our bound is thigh with
+respect to the communication. Since the optimal communication budget scales with 𝐴, this lets us presume
+that we can tackle this problem by performing 𝐴separate least-squares estimations. Inspired by that, we
+present Algorithm 1 and further show in Theorem 3.5 that it can match this lower bound up to logarithmic
+factors.
+Algorithm 1 (LSE) Distributed offline least-squares
+Data:{c𝑙
+𝑎,𝑟𝑙
+𝑎}𝑛
+𝑙=1for𝑎∈A
+On individual machines compute:
+for𝑖∈{1,...,𝑚}do
+for𝑎∈𝐴do
+𝑋𝑎←(𝑐1
+𝑎,...,𝑐𝑛
+𝑎)𝑇r𝑎←(𝑟1
+𝑎,...,𝑟𝑛
+𝑎)𝑇
+ˆθ𝑖
+𝑎←(𝑋𝑇
+𝑎𝑋𝑎)−1𝑋𝑇
+𝑎r𝑎
+end
+Quantise each component of ˆθ𝑎𝑖up to precision 𝑃and send to central server.
+end
+At central server compute: ˆθ𝑎←1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+𝑎for𝑎∈A
+returnθ𝑎for each𝑎∈A
+Theorem 3.5 Let us define θ=(θ1,...,θ𝐴)to be the concatenated parameter vector for all actions. For
+any value ofθ, Algorithm 1 using transmission with precision 𝑃achieves a worst-case risk upper bounded as
+follows:
+𝑊 <O
+𝐴𝐶maxn𝑅2
+max
+𝑚𝑛𝜆 min,𝑃o
+Proof 3.6 (sketch): We present a sketch of proof here and defer the full proof to Appendix E. We start
+by assuming the transmission is lossless (i.e. the number of bits is infinite) and then study how the MSE
+changes when transmission introduces quantisation error. It is a well-known fact that for the least-Squares
+estimate, the bias is zero, hence using the bias-variance decomposition, we get that the bound on estimator’s
+variance is also the bound on its MSE. Some algebraic manipulations allow us to show that Var (ˆ𝜃𝑖
+𝑎,𝑘) ≤
+Í𝐶
+𝑗=1Í𝑛
+𝑙=1𝑄2
+𝑗,𝑘𝑉2
+𝑗,𝑙
+𝜆min𝑛Var(𝑟𝑙
+𝑎). We now observe that because of Assumption 3.1, we can use Popoviciu inequality
+to obtain Var(𝑟𝑙
+𝑎)≤𝑅2
+max. Substituting this back into the equation for MSE, we get 𝔼[(θ−ˆθ)2]≤𝐴𝐶𝑅2
+max
+𝑚𝑛𝜆 min.
+Using the fact that each component is quantised up to precision 𝑃, the max error introduced by quantisation is
+𝐴𝐶𝑃. Combining that with the bound on MSE of lossless transmission, we get the statement of the Theorem.
+A direct conclusion of this result is that if we want the quantisation to not affect the worst-case performance
+of Algorithm 1, the precision 𝑃needs to scale as Θ(𝑅2
+max
+𝑚𝑛𝜆 min)and hence the number of transmitted bits 𝐵must
+scale asΘ(𝐴𝐶log𝑚𝑛𝜆 min
+𝑅2max). While enjoying the simplicity of analysis, the contextual bandit problem does not
+5Under review as submission to TMLR
+take into account that the current actions of the agent influence the future state of the environment. This
+is an important consideration in personalised suggestions (Liao et al. (2020)), which is one of the problems
+likely to be solved by a multitude of low-powered personal devices, fitting within our distributed processing
+framework. Hence we proceed to study a more sophisticated model of reinforcement learning problems in
+the next section, where we focus on parameter identification in full Markov Decision Processes.
+4 Linear Value Function Prediction in Episodic MDP
+We consider a Markov Decision Process (MDP) consisting of states 𝑠∈S, actions𝑎∈Aand rewards the
+agent receives that we assume follow Assumption 3.1. We assume we observe the gameplay history of an
+agent taking actions according to its policy 𝜋(𝑠|𝑎):(S,A)→[ 0,1], hence the problem studied reduces to
+a Markov Reward Process. In episodic setting, we define a return of a policy 𝜋from state𝑠as the sum of
+all rewards obtained while following the policy 𝜋after having visited state 𝑠, i.e.𝐺𝑠=𝔼[Í𝐻
+𝑘=𝑡𝑟𝑘|𝑠𝑡=𝑠]. To
+evaluate how good a certain policy is in a given Markov Decision Process, it is common to learn its value
+function𝑣(𝑠):S→ℝ, which assigns the return to each state. In many cases, it is sufficient to model the
+value function for each state as a linear combination of some features related to the given state, we will
+denote a vector of such features as c𝑠. We assume those features are universally known beforehand and
+introduce Assumption 3.2 regarding the feature vectors, similarly as in the multi-armed bandit problem.
+Assumption 4.1 Feature vector for each state is normalised, i.e. ∥c𝑗∥2
+2≤1. If we form a matrix 𝑋=
+(𝑐1,...,𝑐𝑛)with feature vectors for all states, then the smallest eigenvalue of the matrix 𝑋𝑇𝑋is𝜂minsuch
+that0<𝜂min≤1and𝜂min=𝑆𝜆minfor some constant 𝜆min.
+Although in practice, a linear model will most likely be just an approximation to the true value function,
+within our problem setting we will assume that the problems we consider can be perfectly modelled in
+this way, i.e. 𝑣(𝑠)=c𝑇
+𝑠θ. We will now define our assumptions for episodic and non-episodic settings. We
+shall assume that the maximum number of transitions within an episode (so-called "horizon" length) is
+equal to𝐻. We shall refer to the states that can be visited at step ℎasℎ-level states and denote a set
+of such states as Sℎand we denote 𝑆ℎ=|Sℎ|. Consequently the set of initial states is S0and the set of
+terminal states is S𝐻. We introduce a different parameter vector to model the value function at each level.
+Hence for states at level ℎ, we have that∀𝑠∈𝑆ℎ𝐺𝑠=c𝑇
+𝑠θℎ. and the parameter of interest is θ=θℎ. The
+inference is conducted based on the gameplay history, which consists of the steps made during 𝑁episodes,
+i.e.ℎ={{(𝑠1,𝑎1,𝑟1),...,(𝑠𝑇𝑙,𝑎𝑇𝑙,𝑟𝑇𝑙)}}𝑁
+𝑙=1, where𝑇𝑙≤𝐻is the length of the 𝑙th episode. Within this
+section we conduct our analysis under Assumption 4.2, regarding the number of times we visit each state at
+a given level within the history.
+Assumption 4.2 Within gameplay history, for every state at a given level ℎwe have𝐸episodes where it
+was visited.
+This assumption might be treated as a strong one, however, without it, there exists a simple pathological
+example, where there is a special feature equal to zero in every state except for one state that is almost never
+visited. In such a case, no matter how many episodes we sample, unless we can guarantee that we have
+visited this state at least some number of times, we cannot learn the parameter value for that special feature
+with high certainty. We now present our lower bound on minimax risk of estimation of the parameter θℎat
+levelℎin Theorem 4.3.
+Theorem 4.3 In a distributed offline episodic linear value function approximation problem at level ℎand
+context with dimensionality 𝐶and state space size of 𝑆ℎ, such that𝑆ℎ≥𝐶 >12, under assumptions 3.1, 3.2
+and 4.2, given m processing centres, with communication budget 𝐵≥1, for any independent communication
+protocol, the minimax risk M is lower bounded as follows:
+𝑀≥Ω 
+𝐶(𝐻−ℎ)2𝑅2
+max
+𝑆ℎ𝐸𝑚𝜆 minmin(
+maxn𝐶
+𝐵log𝑚,1o
+,𝑚
+log𝑚)!
+6Under review as submission to TMLR
+Proof 4.4 (sketch): We present a sketch of proof here and defer the full proof to Appendix C. We proceed
+similarly as in the proof of Theorem 3.3 and set the 𝑘th component of feature vector for 𝑗th state to𝑐𝑗,𝑘=√𝜆min𝑆ℎ𝟙𝑘=𝑗for the first 𝑆ℎstates and we set feature vectors for remaining 𝑛−𝑆ℎstates to zero vectors.
+We consider the following Markov Decision Process: starting randomly in one of the states 𝑗at levelℎ, the
+agent chooses one of two actions. Choosing the "good" action causes the agent the receive a reward of 𝑅max
+for the remaining (𝐻−ℎ)steps until the episode ends, while the "bad" action causes the agent to receive
+a reward of−𝑅maxuntil the end. The agent draws a random variable 𝑝𝑗∼Bernoulli(1
+2+c𝑇
+𝑗θ
+2(𝐻−ℎ)𝑅max)and
+selects "good" action if 𝑝𝑗=1and "bad" action otherwise. We follow similar steps as in Theorem 3.3 and
+bound the likelihood ratio, however, under the condition thatÍ𝐸
+𝑙=1(2𝑝𝑙
+𝑗−1)< 𝑎, where𝑎is a quantity we
+control. We then use Hoeffding inequality to bound the probability thatÍ𝐸
+𝑙=1(2𝑝𝑙
+𝑗−1)> 𝑎. We then derive
+a bound on KL-divergence and use Lemma A.2 to derive a second bound on mutual information. We finish
+the proof by combining two bounds and choosing such 𝛿and𝑎that the bound is tightest.
+Hence we get that for the risk not to depend on communication budget we need a number of at least
+𝐵 >Ω(𝐶
+log𝑚)bits. It might be surprising that the bound decreases as the state space 𝑆increases, however,
+because of Assumption 4.2 we have that each new state effectively increases the number of available samples
+for the same number of features. Note that in practice, to obtain a sensible approximation, the dimension
+of features is likely to grow with the size of state space.
+We now show that this class of problems can be efficiently solved by using performing distributed Monte-
+Carlo return estimates. We present Algorithm 2, which uses Monte-Carlo to obtain return estimates and
+then least-squared to fit the parameters to feature vectors, which are then quantised and communicated to
+the main centre. We prove that it can match this lower bound with communication budget optimal up to
+logarithmic factors as stated by Theorem 4.5.
+Algorithm 2 (MC LSE) Distributed offline least-squares with Monte-Carlo return estimates
+Data:{(𝑠𝑙
+𝑡,𝑟𝑙
+𝑡,𝑎𝑙
+𝑡)𝑇𝑙
+𝑡=1}𝑁
+𝑙=1
+On individual machines compute:
+for𝑖∈{1,...,𝑚}do
+∀𝑠∈𝑆𝑁𝑠←0𝐺𝑠←0
+for𝑙∈1,...,𝑁do
+for𝑠∈𝑆do
+𝑓𝑠←step of first time visit to 𝑠in episode𝑙
+𝐺𝑠←𝐺𝑠+Í𝑇𝑙
+𝑡=𝑓𝑠𝑟𝑙
+𝑡𝑁𝑠←𝑁𝑠+1
+end
+end
+∀𝑠∈𝑆𝑔𝑠←𝐺𝑠
+𝑁𝑠
+𝑋←(𝑐1,...,𝑐𝑆)𝑇g←(𝑔1,...,𝑔𝑆)𝑇
+ˆθ𝑖←(𝑋𝑇𝑋)−1𝑋𝑇g
+Quantise each component of ˆθ𝑖up to precision 𝑃and send to central server.
+end
+At central server compute: ˆθ←1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+returnθ
+Theorem 4.5 For any value of θ, Algorithm 2 using transmission with precision 𝑃achieves worst-case risk
+upper bounded as follows:
+𝑊 <O
+𝐶maxn(𝐻−ℎ)2𝑅2
+max
+𝑚𝑆ℎ𝐸𝜆min,𝑃o
+Proof 4.6 We observe that the return is always within the range (−(𝐻−ℎ)𝑅max,(𝐻−ℎ)𝑅max), hence by
+Popoviciu inequality we get Var (𝑔𝑙
+𝑠)≤(𝐻−ℎ)2𝑅2
+maxand thus Var(𝑔𝑠)≤1
+𝐸(𝐻−ℎ)2𝑅2
+max. Following similar
+steps as in the proof of Theorem 3.5 we get the statement of the Theorem.
+7Under review as submission to TMLR
+Hence, thenumberofbitstransmitted 𝐵mustscaleas Θ(𝐶log𝑚𝑆𝐸𝜆 min
+(𝐻−ℎ)𝑅max)forAlgorithm2toachieveminimax
+optimalperformance. Whiletheepisodicsettingcanbeusedtomodelmanyproblems, inapplicationsrelated
+to electronic wearables or IoT, we would usually be interested in continuous problems, as by design those
+devices are meant to accompany user all the time and constantly improve their quality of life. We thus build
+on the results we derived so far and conduct an analysis of the non-episodic problem setting in the next
+section.
+5 Linear Value Function Prediction in Non-episodic MDP
+Contrary to the episodic Markov Reward Processes, in non-episodic setting we asumme all states share the
+same parameter vector, which defines a linear relationship between the value function and features of a state.
+In non-episodic setting we introduce a discount factor 𝛾∈(0,1), and define the return as a discounted sum
+of rewards starting from state 𝑠and following policy 𝜋afterwards, i.e. 𝐺𝑠= 𝔼[Í∞
+𝑘=0𝑟𝑡+𝑘𝛾𝑘|𝑠𝑡=𝑠]=c𝑇
+𝑠θ
+andθis the parameter we would like to conduct inference about. We define the received gameplay history
+as i.i.d. samples of single steps made by the agent, where the initial state 𝑠sampled from the stationary
+distribution 𝜋(𝑠)under its policy, i.e. ℎ={((𝑠𝑡,𝑎𝑡,𝑟𝑡,𝑠𝑡+))}𝑛
+𝑡=1, where𝑠𝑡∼𝜋(𝑠). We introduce Assumption
+5.1 to ensure 𝜋(𝑠)exists.
+Assumption 5.1 The Markov Chain describing states visited by the agent’s policy is aperiodic and ir-
+reducible, so that the stationary distribution 𝜋exists. We assume that for each state 𝑠∈𝑆we have
+𝜋min≤𝜋(𝑠)≤𝜋maxand there is at least one state which frequently visited, i.e. 𝜋max>0.01.
+Theorem 5.2 In a distributed linear value function approximation problem with context dimensionality of
+𝐶 > 12, state space size of 𝑆≤𝐶and discount factor of 0< 𝛾 < 0.99, under assumptions 3.1, 4.1 and
+5.1, given𝑚processing centres each with gameplay history, with each centre having a communication budget
+𝐵≥1, the minimax risk 𝑀of any algorithm is lower bounded as:
+𝑀≥Ω 
+𝐶𝑅2
+max
+(1−𝛾)2𝜋max𝑆𝑛𝑚𝜆 minmin(
+maxn𝐶log𝑚
+𝐵,1o
+,𝑚
+log𝑚)!
+Proof 5.3 (sketch): We present a sketch of proof here and defer the full proof to Appendix D.
+We consider the following MDP: from each state 𝑗, regardless of the agent’s action it either states in the
+same state with probability 1−𝑝and receives a reward with a mean of ¯𝑟𝑗or moves to any other states chosen
+with a probability of𝑝
+𝑆−1and receives a reward 𝑟0. We see that because of the consistency equation for value
+functions we have:
+𝑣(𝑗)=(1−𝑝)¯𝑟𝑗+𝑝𝑟0+𝛾∑︁
+𝑠′∈𝑆{𝑗}𝑣(𝑠′)𝑝
+𝑆−1+𝛾𝑣(𝑗)(1−𝑝)
+We now set 𝑟0=−𝛾Í
+𝑠′∈𝑆{𝑗}𝑣(𝑠′)
+𝑆−1to get that ¯𝑟𝑗=𝑣(𝑗)(1−𝛾+𝑝𝛾)
+1−𝑝. We set feature vectors and parameters in
+the same way as in the proof of Theorem 4.3. We also set ¯𝑟𝑗=(2𝑝𝑗−1)𝑅maxwhere𝑝𝑗∼Bernoulli(1
+2+√𝜆min𝑆𝑣𝑘𝛿
+2𝑅max1−𝛾+𝑝𝛾
+1−𝑝). We thus have a similar situation as in the proof of Theorem 4.3, where the data received
+can be reduced to outcomes of Bernoulli trials. We proceed in the same way to obtain a bound that depends on
+𝑝and gets tighter as 𝑝→0. We now can index data generating distribution by 𝑝and obtain their supremum,
+which gives the statement of the Theorem.
+While we can extend the lower bound to the non-episodic case while following a similar method as in the
+episodic one, we see that because Monte-Carlo estimators for return cannot be used in the non-episodic
+setting, we cannot extend Algorithm 2 in the same way. In this new setting, an algorithm needs to utilise
+the consistency of the value function. We thus propose Algorithm 3, which is a distributed variant of
+temporal difference learning. We build on the analysis conducted by Bhandari et al. (2018) to upper bound
+its worst-case performance in Theorem 5.4.
+8Under review as submission to TMLR
+Algorithm 3 (TD) Distributed offline temporal difference learning
+Data:(c𝑡,𝑟𝑡,𝑎𝑡,c𝑡+)𝑇
+𝑡=1
+On individual machines compute:
+for𝑖∈{1,...,𝑚}do
+ˆθ𝑖←θ0
+for𝑡∈1,...,𝑁do
+g𝑡←(𝑟𝑡+𝛾c𝑇
+𝑡+ˆθ𝑖−c𝑇
+𝑡ˆθ𝑖)c𝑡
+ˆθ𝑖←ˆθ𝑖+𝛼𝑡g𝑡
+end
+Quantise each component of ˆθ𝑖up to precision 𝑃and send to central server.
+end
+At central server compute: ˆθ←1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+return ˆθ
+Theorem 5.4 The worst-case risk of Algorithm 3 run with a learning rate of 𝛼𝑡=𝛽
+Λ+𝑡
+𝜔with𝛽=2
+(1−𝛾)𝜔
+andΛ=16
+(1−𝛾)2𝜔is upper bounded as follows:
+𝑊≤O 
+max(max{𝑅2
+max
+𝑆𝜋min𝜆min𝑚,∥θ−1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+0∥2
+2}
+1+(1−𝛾)2𝑛,𝐶𝑃)!
+Proof 5.5 (sketch): We present a sketch of proof here and defer the full proof to Appendix F.
+We define ¯θ𝑡:=1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+𝑡to be the average vector from all machines at timestep 𝑡. Note that this vector
+is never actually created, except for the last step when we average all final results. We can see that it must
+satisfy the following recursive relation:
+¯θ𝑡+1=1
+𝑚𝑚∑︁
+𝑖=1ˆθ𝑖
+𝑡+1=1
+𝑚𝑚∑︁
+𝑖=1[ˆθ𝑖
+𝑡+𝛼𝑡g𝑖
+𝑡]=¯θ𝑡+𝛼𝑡1
+𝑚𝑚∑︁
+𝑖=1g𝑖
+𝑡
+We utilise Lemmas H.1 and H.3 to show that:
+𝔼[∥θ−¯θ𝑡+1∥2
+2]≤𝔼[∥θ−¯θ𝑡∥2
+2](1−2𝛼𝑡𝜔(1−𝛾)+𝛼2
+𝑡)+𝛼2
+𝑡
+𝑚𝑅2
+max
+where we define 𝜔to be the smallest eigenvalue of the covariance matrix weighted by the stationary distri-
+bution, i.e. smallest eigenvalue ofÍ
+𝑠∈𝑆𝜋(𝑠)c𝑠c𝑇
+𝑠. We then finish the proof by induction and observing that
+by concavity of eigenvalues we have 𝑆𝜋min𝜆min≤𝜔≤𝜆min≤1.
+We see that there are essentially two terms contributing to the worst-case risk, the term𝑅2
+max
+𝑆𝜋min𝜆min𝑚resulting
+from gradient’s variance and the term ∥θ−1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+0∥2
+2resulting from initial bias. We see that increasing
+the number of machines 𝑚will only decrease the variance term, but will not decrease the overall worst-case
+risk if the initial bias is larger. This result has a practical implication, as we essentially show that using
+more devices within a network is not necessarily going to improve our estimate. It might spuriously appear
+that this algorithm is contradicting the lower bound as the worst-case risk has no explicit dependence on
+the dimensionality of the features. However, we can easily show (explicitly derived in Appendix G) that the
+initial bias will scale at least as O(𝑆𝑅2
+𝜆min(1−𝛾)), which is consistent with the bound stated in Theorem 5.2, as
+we assumed 𝐶≤𝑆.
+In comparison to existing distributed versions of TD learning where gradients are communicated between
+machines at each step, in our version only the final estimates are communicated, hence the initial bias cannot
+be cancelled by introducing data from more machines. This is, however, due to the difficulty of our problem
+setting. With one communication round, it is not possible to constantly transmit information about the
+gradient updates. This issue would come up in practice, whenever the devices we run our algorithm on are
+9Under review as submission to TMLR
+not constantly connected to the network and communication in real-time, during the algorithm runtime is
+not possible.
+It might come as a surprise that although we can easily propose an optimal algorithm for the episodic case,
+the same is not true for the non-episodic setting. In fact, we can see that for any unbiased algorithm that
+has optimal risk in a non-distributed version, its distributed version averaging results from all machines will
+also have optimal risk as long as the lower bound scales as the inverse of the number of machines 𝑚. In
+the non-episodic setting, however, we cannot directly obtain estimates of the return and hence need to rely
+on a method utilising the temporal structure of the problem. Although in the non-distributed version, the
+temporal difference can often be superior to Monte-Carlo methods even in the episodic case due to smaller
+variance, we see that in a single-round communication setting, the bias is preventing the algorithm from
+efficiently utilising data available on all machines.
+6 Discussions
+We have studied three offline RL problems in a special case of distributed processing. We have identified a
+lower bound on minimax risk in each problem and proposed algorithms that match these lower bound up to
+logarithmic factors in the cases of contextual linear bandits and episodic MDP. In the case of non-episodic
+MDP, we have proposed a distributed version of temporal difference learning and analysed its worst-case
+risk. We have shown that its worst-case risk decreases with the number of cooperating machines only until
+some point, where the risk due to initial bias starts to dominate over the risk caused by variance.
+Notably, our work studies a different problem from Federated Learning (Konečn` y et al. (2015)) wherein
+a typical setting assumes one can send parameter values to the central server while minimising the total
+number of communication rounds. In our setting, we assume more restrictive conditions with regards to
+communication by limiting the communication round to be only one and by further restricting the number
+of information (i.e., the bits) each machine can send.
+Moreover, we would like to emphasise that our bounds are developed on the risk in estimating the parameter
+values rather than on the regret (Wang et al., 2019). We note that there are problems where learning the
+parameter values might be of greater interest than just minimising the regret of actions. Recalling the
+example of physical activity suggestion in the Introduction, we not only want to learn the optimal way of
+suggesting the activities, but also analyse which factors influence how healthy the lifestyle of an individual
+is. Hence, it would be more beneficial to estimate the parameters of, for example, the value function and
+decrease the risk of those estimates.
+In this paper, we have derived the first lower bound for distributed RL problems other bandits. Our method
+relies on constructing hard instances and converting them to statistical inference problems. This approach
+can be easily applied to other settings such as state-action value estimation or off-policy learning, which
+constitutes one of the directions of future work. We also identified a weakness of TD learning resulting from
+its initial bias. Can this bias be estimated in practice so that we do not unnecessarily utilise data from more
+machines than needed? Can we correct for initial bias so that worst-case risk always decreases with more
+machines? Can it match the derived lower bound? We leave these questions open to future research.
+References
+Jalaj Bhandari, Daniel Russo, and Raghav Singal. A finite time analysis of temporal difference learning with
+linear function approximation. In Conference on learning theory , pp. 1691–1692. PMLR, 2018.
+Ruiquan Huang, Weiqiang Wu, Jing Yang, and Cong Shen. Federated linear contextual bandits. Advances
+in Neural Information Processing Systems , 34, 2021.
+Jakub Konečn` y, Brendan McMahan, and Daniel Ramage. Federated optimization: Distributed optimization
+beyond the datacenter. arXiv preprint arXiv:1511.03575 , 2015.
+10Under review as submission to TMLR
+Peng Liao, Kristjan Greenewald, Predrag Klasnja, and Susan Murphy. Personalized heartsteps: A reinforce-
+ment learning algorithm for optimizing physical activity. Proceedings of the ACM on Interactive, Mobile,
+Wearable and Ubiquitous Technologies , 4(1):1–22, 2020.
+Yuanhao Wang, Jiachen Hu, Xiaoyu Chen, and Liwei Wang. Distributed bandit learning: Near-optimal
+regret with efficient communication. arXiv preprint arXiv:1904.06309 , 2019.
+Yuchen Zhang, John Duchi, Michael I Jordan, and Martin J Wainwright. Information-theoretic lower bounds
+for distributed statistical estimation with communication constraints. In C. J. C. Burges, L. Bottou,
+M. Welling, Z. Ghahramani, and K. Q. Weinberger (eds.), Advances in Neural Information Processing
+Systems, volume 26. Curran Associates, Inc., 2013.
+11Under review as submission to TMLR
+A General methods for deriving lower bounds
+Let us define a set V={−1,1}𝑑and sample 𝑉uniformly fromV. Conditioned on 𝑉=𝑣we sample𝑋1from
+𝑃𝑋1(·|𝑉=𝑣)so that𝜃𝑣=𝜃(𝑃𝑥(·|𝑣))=𝛿𝑣where𝛿 >0is a fixed quantity we control. Consider a Markov
+chain𝑉→𝑋1→···→𝑋𝑛→𝑌→ˆ𝜃. Under these conditons, it was proven by Zhang et al. (2013) that for
+𝑑 >12we have:
+𝑀(𝜃,𝑃,𝐵)≥𝛿2
+⌊𝑑
+6⌋+1 
+1−𝐼(𝑌,𝑉)+log 2
+𝑑
+6!
+Hence, if we can choose a 𝛿such that𝐼(𝑌,𝑉)is upper bounded, this directly translates to a lower bound
+on the minimax risk. It hence remains to upper bound the mutual information any possible message 𝑌can
+carry aboutv, so that we can use it to obtain a lower bound on minimax risk. To that goal, we will use
+the inequalities described in subsequent subsections and combine them into one upper bound on mutual
+information. After that, it remains to find such a 𝛿that this upper bound remains constant or is at most
+linear in the dimensionality of the problem.
+A.1 Tensorisation of information
+Lemma A.1 (Tensorisation of information property in Zhang et al. (2013)) If𝑉is a parameter
+of distribution we wish to make inference about and the message 𝑌𝑖send by the 𝑖th processing centre is
+constructed based only on the data 𝑋𝑖then the following is true:
+𝐼(𝑉;𝑌1:𝑚)≤𝑚∑︁
+𝑖=1𝐼(𝑉;𝑌𝑖)
+A.2 Bound on mutual information by KL-divergence
+Within this section, we present another bound on mutual information, which utilises the KL-divergence of
+data-generating distribution.
+Lemma A.2 Let𝑉→𝑋𝑖→𝑌𝑖form a Markov Chain and 𝑌=(𝑌1,...,𝑌𝑚). Let𝑉be a𝑑-dimensional
+vector with each component sampled uniformly from {𝑣𝑗,𝑣∗
+𝑗}. Let each𝑋𝑖consist of(𝑅1,...,𝑅𝑑)where every
+𝑅1=(𝑅1
+1,...,𝑅𝑛
+1). Let every 𝑅𝑙
+𝑗be sampled from the same distribution parametrised by 𝑣𝑗. Then:
+𝐼(𝑌,𝑉)≤𝑚𝑛
+4𝑑∑︁
+𝑗=1 KL[𝑝(𝑅1
+𝑗|𝑣),𝑝(𝑅1
+𝑗|𝑣∗)]+KL[𝑝(𝑅1
+𝑗|𝑣∗),𝑝(𝑅1
+𝑗|𝑣)]
+Proof A.3 From tensorisation of information (Lemma A.1) and data-processing inequality we get:
+𝐼(𝑌,𝑉)≤𝑚𝐼(𝑌𝑖,𝑉)≤𝑚𝐼(𝑋𝑖,𝑉)
+We now observe that 𝑅𝑗are independent, hence:
+𝐼((𝑅1,...,𝑅𝑑),𝑉)=𝑑∑︁
+𝑗=1𝐼((𝑅1
+𝑗,...,𝑅𝑛
+𝑗),𝑉)=𝑑∑︁
+𝑗=1𝑛∑︁
+𝑙=1𝐼(𝑅𝑙
+𝑗,𝑉|𝑅1:𝑙−1
+𝑗)=
+=𝑑∑︁
+𝑗=1𝑛∑︁
+𝑙=1[𝐻(𝑅𝑙
+𝑗|𝑅1:𝑙−1
+𝑗)−𝐻(𝑅𝑙
+𝑗|𝑉,𝑅1:𝑙−1
+𝑗)]≤𝑑∑︁
+𝑗=1𝑛∑︁
+𝑙=1[𝐻(𝑅𝑙
+𝑗)−𝐻(𝑅𝑙
+𝑗|𝑉)]=𝑛𝑑∑︁
+𝑗=1𝐼(𝑅1
+𝑗,𝑉)
+Where the last inequality is true since conditioning can only reduce entropy and 𝑅𝑖
+𝑗are independent given 𝑉.
+We know focus on the mutual information:
+𝐼(𝑅1
+𝑗,𝑉)=KL[𝑝(𝑅1
+𝑗,𝑉),𝑝(𝑅1
+𝑗)𝑝(𝑉)]=KL[𝑝(𝑅1
+𝑗|𝑉)𝑝(𝑉),𝑝(𝑅1
+𝑗)𝑝(𝑉)]
+12Under review as submission to TMLR
+=∑︁
+𝑣𝑝(𝑣)KL[𝑝(𝑅1
+𝑗|𝑣),𝑝(𝑅1
+𝑗)]=∑︁
+𝑣𝑝(𝑣)KL[∑︁
+𝑣′𝑝(𝑅1
+𝑗|𝑣)𝑝(𝑣′),∑︁
+𝑣′𝑝(𝑅1
+𝑗|𝑣′)𝑝(𝑣′)]
+Because of convexity of KL-divergence we get:
+𝐼(𝑅1
+𝑗,𝑉)≤∑︁
+𝑣,𝑣′𝑝(𝑣)𝑝(𝑣′)KL[𝑝(𝑅1
+𝑗|𝑣),𝑝(𝑅1
+𝑗|𝑣′)]=
+=1
+4 KL[𝑝(𝑅1
+𝑗|𝑣),𝑝(𝑅1
+𝑗|𝑣∗)]+KL[𝑝(𝑅1
+𝑗|𝑣∗),𝑝(𝑅1
+𝑗|𝑣)]
+A.3 Bound on mutual information by set construction
+We present a first bound on mutual information, which can requires constructing a set such that the samples
+belong to it with some probability.
+Lemma A.4 (Lemma 4 in Zhang et al. (2013)) Let V be sampled uniformly from {−1,1}𝑁. For any
+(𝑖,𝑗)assume that 𝑋𝑖
+𝑗is independent of {𝑉𝑗′:𝑗′≠𝑗}given𝑉𝑗. Let𝑃𝑋𝑗be the probability measure of 𝑋𝑗and
+let𝐵𝑗be a set such that for some 𝛼:
+sup
+𝑆∈𝜎(𝐵𝑗)𝑃𝑋𝑗(𝑆|𝑉=𝑣)
+𝑃𝑋𝑗(𝑆|𝑉=𝑣′)≤exp(𝛼)
+Define random variable 𝐸𝑗=1f𝑋𝑗∈𝐵𝑗and 0 otherwise. Then
+𝐼(𝑉,𝑌𝑖)≤𝑁∑︁
+𝑗=1𝐻(𝐸𝑗)+𝑁∑︁
+𝑗=1𝑃(𝐸𝑗=0)+2(𝑒4𝛼−1)2𝐼(𝑋𝑖,𝑌𝑖)
+Additionally if 𝛼<1.2564
+4, then the following is also true:
+𝐼(𝑉,𝑌𝑖)≤𝑁∑︁
+𝑗=1𝐻(𝐸𝑗)+𝑁∑︁
+𝑗=1𝑃(𝐸𝑗=0)+128𝛼2𝐼(𝑋𝑖,𝑌𝑖)
+Proof A.5 The first statement is Lemma 4 of Zhang et al. (2013).
+The second statement directly follows from it, as for 𝑥 <1.2564, it holds that exp(𝑥)−1<2𝑥
+B Proof of Theorem 3.3
+Theorem 3.3 In a distributed offline linear contextual MAB problem with 𝐴actions and context with di-
+mensionality 𝐶such that𝐶𝐴 > 12under assumptions 3.1 and 3.2, given m processing centres each with
+𝑛≥𝐶samples for each arm, with each centre having communication budget 𝐵≥1, for any independent
+communication protocol, the minimax risk M is lower bounded as follows:
+𝑀≥Ω 
+𝐴𝐶𝑅2
+max
+𝑚𝑛𝜆 minmin(
+maxn𝐴𝐶
+𝐵,1o
+,𝑚)!
+Proof B.1 Where we omit indexing by the machine index 𝑖, this means that statement holds for all machines.
+Let us consider a problem where we set the parameter vector for 𝑗th arm asθ𝑗=𝛿v𝑗where𝛿is a quantity
+we will specify later, v𝑗is a vector sampled uniformly from {−1,1}𝐶and the𝑘th element of context vector
+for the𝑙th sample is set to 𝑐𝑙
+𝑘=√𝜆min𝑛𝟙𝑘=𝑙, so that Assumption 3.2 is satisfied.
+LetVbe a concatenated vector defined as V=(v1,...,v𝐶)𝑇about which we would like to perform inference.
+Let𝑟𝑙
+𝑗be the reward received after pulling 𝑗th arm for the 𝑙th time. We now define the underlying process for
+generating the reward as follows, let 𝑟𝑙
+𝑗=(2𝑝𝑙
+𝑗−1)𝑅max, where𝑝𝑙
+𝑗=Bernoulli(1
+2+𝛿𝑣𝑇
+𝑗𝑐𝑙
+2𝑅max). We see that under
+such construction, the reward is always within [−𝑅max,𝑅max]and its expected value is 𝔼[𝑟𝑙
+𝑗]=𝛿v𝑇
+𝑗c𝑙=θ𝑗c𝑙.
+13Under review as submission to TMLR
+Let𝑌𝑖be the message send by the 𝑖th processing centre and 𝑋𝑖be all𝑟𝑙
+𝑗for all𝑗and𝑙stored on the 𝑖th
+processing centre and let us define 𝑃𝑖in the same way for 𝑝𝑙
+𝑗. We observe that 𝑉→𝑃𝑖→𝑋𝑖→𝑌𝑖forms a
+Markov Chain. We see that this scenario satisfies the assumptions required to use the method from Appendix
+A with𝑑=𝐴𝐶. Hence we would like to find a bound on 𝐼(𝑉,𝑌1:𝑚). First let us consider the likelihood ratio
+of𝑝𝑙
+𝑗for𝑙={1,...,𝑛}given𝑣𝑗,𝑘and𝑣′
+𝑗,𝑘=−𝑣𝑗,𝑘. We observe that for our construction of c𝑘we essentially
+havev𝑇
+𝑗c𝑘=𝑐𝑘
+𝑘𝑣𝑗,𝑘. Hence the likelihood ratio can be expressed as:
+ 1
+2+𝑐𝑘
+𝑘𝑣𝑗,𝑘𝛿
+2𝑅max
+1
+2−𝑐𝑘
+𝑘𝑣𝑗,𝑘𝛿
+2𝑅max!𝑝𝑘
+𝑗 1
+2−𝑐𝑘
+𝑘𝑣𝑗,𝑘𝛿
+2𝑅max
+1
+2+𝑐𝑘
+𝑘𝑣𝑗,𝑘𝛿
+2𝑅max!1−𝑝𝑘
+𝑗
+= 1
+2+𝑐𝑘
+𝑘𝑣𝑗,𝑘𝛿
+2𝑅max
+1
+2−𝑐𝑘
+𝑘𝑣𝑗,𝑘𝛿
+2𝑅max!2𝑝𝑘
+𝑗−1
+(1)
+For𝑥 <1
+4we have that1+𝑥
+1−𝑥≤exp{17
+8𝑥}, hence when𝑐𝑘
+𝑘𝑣𝑘𝛿
+𝑅max≤1
+4(satisfied when𝑣𝑘𝛿√𝐶𝜆min
+𝑅max≤1
+4), the ratio
+above is bounded by:
+≤expn17𝑐𝑘
+𝑘𝛿𝑣𝑗,𝑘
+8𝑅max
+2𝑝𝑘
+𝑗−1o
+=expn17√𝑛𝜆min𝛿𝑣𝑘
+8𝑅max
+2𝑝𝑘
+𝑗−1o
+We observe that we always have2𝑝𝑘
+𝑗−1≤1, hence the ratio is bounded by exp{17𝛿√𝑛𝜆min
+8𝑅max}. We can thus
+satisfy the conditions of Lemma A.4 with 𝛼=17𝛿√𝑛𝜆min
+8𝑅maxif we define 𝐵𝑗,𝑘={𝑝𝑘
+𝑗: 2𝑝𝑘
+𝑗−1≤1}, where we have
+that𝑃(𝑝𝑘
+𝑗∈𝐵𝑗,𝑘)=1. If we can set 𝛿such that17𝛿√𝑛𝜆min
+8𝑅max<1.2564
+4, then we get:
+𝐼(𝑉,𝑌𝑖)≤289𝜆min𝑛𝛿2
+64𝑅2max𝐼(𝑋𝑖,𝑌𝑖)
+Note that we use a two-dimensional index for 𝑋, whereas in Lemma A.4, the index is one dimensional. This
+is just a matter of notation and those two types of indexing are mathematically equivalent. We see that we
+can bound𝐼(𝑋𝑖,𝑌)as follows:
+𝐼(𝑋𝑖,𝑌𝑖)≤𝐻(𝑌𝑖)≤𝐵
+Combining this with the tensorisation of information (Lemma A.1) we get:
+𝐼(𝑉,𝑌)≤289𝜆min𝑚𝑛𝛿2
+64𝑅2max𝐵 (2)
+We now develop a second inequality for 𝐼(𝑉,𝑌). We observe for the distribution of 𝑝𝑘
+𝑘we have the following:
+KL[𝑝(𝑝𝑘
+𝑘|𝑣),𝑝(𝑝𝑘
+𝑘|𝑣∗)]=1
+2+𝑐𝑘
+𝑘𝛿
+2𝑅max
+log 1
+2+𝑐𝑘
+𝑘𝛿
+2𝑅max
+1
+2−𝑐𝑘
+𝑘𝛿
+2𝑅max!
++1
+2−𝑐𝑘
+𝑘𝛿
+2𝑅max
+log 1
+2−𝑐𝑘
+𝑘𝛿
+2𝑅max
+1
+2+𝑐𝑘
+𝑘𝛿
+2𝑅max!
+=
+=1
+2+𝑐𝑘
+𝑘𝛿
+2𝑅max−1
+2+𝑐𝑘
+𝑘𝛿
+2𝑅max
+log 1
+2+𝑐𝑘
+𝑘𝛿
+2𝑅max
+1
+2−𝑐𝑘
+𝑘𝛿
+2𝑅max!
+=𝑐𝑘
+𝑘𝛿
+𝑅maxlog 1
+2+𝑐𝑘
+𝑘𝛿
+2𝑅max
+1
+2−𝑐𝑘
+𝑘𝛿
+2𝑅max!
+Same as before we use the fact that for 𝑥 <1
+4we have that1+𝑥
+1−𝑥≤exp{17
+8𝑥}, we get:
+KL[𝑝(𝑝𝑘
+𝑘|𝑣),𝑝(𝑝𝑘
+𝑘|𝑣∗)]≤17
+8(𝑐𝑘
+𝑘)2𝛿2
+𝑅2max=17
+8𝑛𝜆min𝛿2
+𝑅2max(3)
+Hence by Lemma A.2 with 𝑑=𝐴𝐶and identifying 𝑅𝑘=(𝑝𝑘
+𝑘)we get:
+𝐼(𝑉,𝑌)≤17
+8𝑚𝑛𝐴𝐶𝛿2𝜆min
+𝑅2max(4)
+14Under review as submission to TMLR
+Combining inequalities 2 and 4 we get:
+𝐼(𝑉,𝑌)≤17
+8𝛿2𝑚𝑛𝜆 min
+𝑅2maxminn17
+8𝐵,𝐶𝐴
+2o
+We can now set:
+𝛿2
+𝐴≤1
+10𝐶𝐴𝑅2
+max
+17
+8𝑚𝑛𝜆 minminn
+17
+8𝐵,𝐶𝐴
+2o=1
+10𝑅2
+max
+17
+8𝑚𝑛𝜆 minminn
+17
+8𝐵
+𝐶𝐴,1
+2o
+𝛿2
+𝐵≤1
+10𝑅2
+max
+17
+8𝑛𝜆min
+𝛿=min{𝛿𝐴,𝛿𝐵}
+We see that under such construction we have𝛿√𝑛𝜆min
+𝑅max<1
+4and17𝛿√𝑛𝜆min
+8𝑅max<1.2564
+4and we can also bound the
+mutual information as follows:
+𝐼(𝑉,𝑌)≤𝐶𝐴
+10
+We now remind the Assumption of the Theorem that 𝐴𝐶 > 12, which allows us to show:
+ 
+1−𝐼(𝑌,𝑉)+log 2
+𝐴𝐶
+6!
+≥ 
+0.65−𝐼(𝑌,𝑉)
+𝐴𝐶
+6!
+≥ 
+0.65−6
+10!
+≥0 (5)
+Which together with the method from Appendix A completes the proof.
+C Proof of Theorem 4.3
+Theorem 4.3 In a distributed offline episodic linear value function approximation problem at level ℎand
+context with dimensionality 𝐶and state space size of 𝑆ℎ, such that𝑆ℎ≥𝐶 >12, under assumptions 3.1, 3.2
+and 4.2, given m processing centres, with communication budget 𝐵≥1, for any independent communication
+protocol, the minimax risk M is lower bounded as follows:
+𝑀≥Ω 
+𝐶(𝐻−ℎ)2𝑅2
+max
+𝑆ℎ𝐸𝑚𝜆 minmin(
+maxn𝐶
+𝐵log𝑚,1o
+,𝑚
+log𝑚)!
+Proof C.1 We consider the following Markov Decision Process: starting randomly in one of the states 𝑖
+at levelℎ, the agent chooses one of two actions. Choosing the "good" action causes the agent the receive a
+reward of𝑅maxfor the remaining (𝐻−ℎ)steps until the episode ends. Choosing the "bad" action causes
+the agent to receive a reward of −𝑅maxuntil the end of episode. The agent draws a random variable 𝑝𝑗∼
+Bernoulli(1
+2+c𝑇
+𝑗θ
+2(𝐻−ℎ)𝑅max)and selects "good" action if 𝑝𝑗=1and "bad" action otherwise.
+We see that with such construction, the maximum absolute value of the reward can never be greater than
+𝑅maxand the mean of the return from state 𝑗is𝔼[𝐺𝑗]= 𝔼[Í𝐻
+𝑡=ℎ𝑟𝑗(𝑡)]= 𝔼[Í𝐻
+𝑡=ℎ𝑟𝑗(𝑡)|𝑝𝑗=1]𝑃(𝑝𝑗=
+1)+𝔼[Í𝐻
+𝑡=ℎ𝑟𝑗(𝑡)|𝑝𝑗=0]𝑃(𝑝𝑗=0)=c𝑇
+𝑗θand hence the value function of state 𝑗is𝑣(𝑗)=c𝑇
+𝑗θ.
+Let us now define the parameters as θ=𝛿v, wherevis sampled uniformly from {−1,1}𝐶. For every episode,
+gameplay history contains (𝐻−ℎ)tuples(c𝑡,𝑎𝑡,𝑟𝑡). Hence, we can just treat the received information as 𝐸
+samples of 𝑝𝑗and contextc𝑗for each state 𝑗∈𝑆ℎ. We can see that this construction satisfies the problem
+setting of Appendix A, with 𝑑=𝐶. We select context elements as 𝑐𝑗,𝑘=√𝑆𝜆min𝟙𝑗=𝑘so that Assumption 3.2
+is satisfied. Let us now consider the likelihood ratio of {𝑝𝑙
+𝑘}𝐸
+𝑙=1given𝑣𝑘=−𝑣′
+𝑘, defining𝑛𝑙
+𝑘=1−𝑝𝑙
+𝑘we have:
+𝐸Ö
+𝑙=1 1
+2+𝑐𝑗,𝑘𝑣𝑘𝛿
+2𝑅max(𝐻−ℎ)
+1
+2−𝑐𝑗,𝑘𝑣𝑘𝛿
+2𝑅max(𝐻−ℎ)!𝑝𝑙
+𝑘 1
+2−𝑐𝑗,𝑘𝑣𝑘𝛿
+2𝑅max(𝐻−ℎ)
+1
+2+𝑐𝑗,𝑘𝑣𝑘𝛿
+2𝑅max(𝐻−ℎ)!1−𝑝𝑙
+𝑘
+=𝐸Ö
+𝑙=1 1
+2+𝑐𝑗,𝑘𝑣𝑘𝛿
+2𝑅max(𝐻−ℎ)
+1
+2−𝑐𝑗,𝑘𝑣𝑘𝛿
+2𝑅max(𝐻−ℎ)!𝑝𝑙
+𝑘−𝑛𝑙
+𝑘
+15Under review as submission to TMLR
+For𝑥 <1
+4we have that1+𝑥
+1−𝑥≤exp{17
+8𝑥}, hence when𝑐𝑗,𝑘𝑣𝑘𝛿
+𝑅max(𝐻−ℎ)≤1
+4(satisfied when𝑣𝑘𝛿√𝑆𝜆min
+𝑅max(𝐻−ℎ)≤1
+4), the
+ratio above is bounded by:
+≤expn17𝛿𝑣𝑘
+8𝑅max(𝐻−ℎ)𝐸∑︁
+𝑙=1𝑐𝑗,𝑘h
+𝑝𝑙
+𝑘−𝑛𝑙
+𝑘io
+≤expn17√𝑆𝜆min𝛿𝑣𝑘
+8𝑅max(𝐻−ℎ)𝐸∑︁
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘o
+(6)
+If it holds thatÍ𝐸
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘≤𝑎then we have that the ratio is bounded by exp{17𝛿√𝜆min
+8𝑅max(𝐻−ℎ)𝑎}. Hence we can
+satisfy the conditions of Lemma A.4 with 𝛼=17𝛿√𝑆𝜆min𝑎
+8𝑅max(𝐻−ℎ)if we define 𝐵𝑘as:
+𝐵𝑘=n
+(𝑝𝑙
+𝑘,...,𝑝𝑙
+𝑘)}𝐸
+𝑙=1∈ℤ𝐸
++:𝐸∑︁
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘<𝑎o
+To complete proof it remains to bound:
+𝑃(𝐸𝑘=0)=1
+2 
+𝑃𝐸∑︁
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘>𝑎𝑣𝑘=1
++𝑃𝐸∑︁
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘>𝑎𝑣𝑘=−1
++𝑃𝐸∑︁
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘<−𝑎|𝑣𝑘=1
++𝑃𝐸∑︁
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘<−𝑎𝑣𝑘=−1!
+We now notice that due to symmetry, the first and fourth time are equal and so are second and third. We
+also notice that the first term must be greater or equal to the second. This gives:
+𝑃(𝐸𝑘=0)≤2𝑃𝐸∑︁
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘>𝑎𝑣𝑘=1
+We notice that the mean ofÍ𝐸
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘is𝜇𝑘=𝑣𝑘𝛿
+(𝐻−ℎ)𝑅maxÍ𝐸
+𝑙=1𝑐𝑘=𝛿𝐸𝑣𝑘√𝑆𝜆min
+(𝐻−ℎ)𝑅max. We can subtract it from
+both side of inequality and divide them by 𝐸:
+𝑃(𝐸𝑘=0)≤2𝑃1
+𝐸"𝐸∑︁
+𝑙=1𝐻∑︁
+𝑡=𝐻−ℎ𝑝𝑙
+𝑘(𝑡)−𝑛𝑙
+𝑘(𝑡)#
+−𝜇𝑘
+𝐸>𝑎
+𝐸−𝜇𝑘
+𝐸𝑣𝑘=1
+Since𝑝𝑙
+𝑘(𝑡)are independent given 𝑣𝑘, we can use Hoeffding inequality with the number of variables equal to
+𝐸, each being confined to [0,1]. Thus if𝑎 > 𝜇𝑘:
+𝑃(𝐸𝑘=0)≤2 exp(
+−2𝐸2(𝑎
+𝐸−𝜇𝑘
+𝐸)2
+𝐸)
+=2 exp(
+−2(𝑎−𝜇𝑘)2
+𝐸)
+=2 exp(
+−2
+𝑎−𝛿𝐸√𝑆𝜆min
+(𝐻−ℎ)𝑅max2
+𝐸)
+(7)
+Same as in Equation 3, we can bound the KL-divergence as follows:
+KL[𝑝(𝑝𝑙
+𝑘|𝑣),𝑝(𝑝𝑙
+𝑘|𝑣∗)]≤17
+8(𝑐𝑘
+𝑘)2𝛿2
+(𝐻−ℎ)2𝑅2max=17
+8𝜆min𝛿2
+(𝐻−ℎ)2𝑅2max
+We now use Lemma A.2 with 𝑑=𝐶and identifying 𝑅𝑙
+𝑘=𝑝𝑙
+𝑘to obtain:
+𝐼(𝑌,𝑉)≤17𝑚𝑆𝐸
+16𝐶𝜆min
+(𝐻−ℎ)2𝑅2max𝛿2(8)
+16Under review as submission to TMLR
+Combining inequalities 6, 7 and 8 we get:
+𝐼(𝑌,𝑉)≤17𝛿2𝑚𝜆min
+8(𝐻−ℎ)2𝑅2maxminn17
+8𝑎2𝐵,𝑆𝐸𝐶
+2o
++
++𝐶𝑚ℎ 
+2 exp(
+−2
+𝑎−𝛿𝐸√𝑆𝜆min
+2(𝐻−ℎ)𝑅max2
+𝐸)!
++2𝐶𝑚exp(
+−2
+𝑎−𝛿𝐸√𝑆𝜆min
+2(𝐻−ℎ)𝑅max2
+𝐸)
+We can now set:
+𝛿2
+𝐴≤1
+1008𝐶(𝐻−ℎ)2𝑅2
+max
+17𝑚𝜆min𝑆𝐸min{17
+4𝐵𝑎2
+𝐸,𝐶
+2}=1
+1008𝐶(𝐻−ℎ)2𝑅2
+max
+17𝑚𝜆min𝑆𝐸min{17
+4𝐵𝑎2
+𝐶𝐸,1
+2}
+𝛿2
+𝐵≤8𝑅2
+max(𝐻−ℎ)2
+17𝐸𝑆𝜆 minlog𝑚
+𝛿=min{𝛿𝐴,𝛿𝐵}
+𝑎=100√︁
+𝐸log 100𝑚
+We see that under such choice we have𝑣𝑘𝛿√𝑆𝜆min
+𝑅max(𝐻−ℎ)≤1
+4and𝑎 > 𝜇𝑘. We now have that:
+17𝛿2
+𝐴𝑚𝜆min
+8(𝐻−ℎ)2𝑅2maxminn17
+8𝑎2𝐵,𝑆𝐸𝐶
+2o
+≤0.01𝐶
+Since𝑎 > 𝜇𝑘we have that:
+(𝑎−𝛿𝐵𝐸√𝑆𝜆min
+2(𝐻−ℎ)𝑅max)2≥(100√︁
+𝐸log 100𝑚−√
+𝐸
+log𝑚)2
+=100𝐸(1−1
+log𝑚)2log 100𝑚≥𝐸log 100𝑚
+We can use this to bound the third term as follows:
+2𝑚𝐶exp(
+−2
+𝑎−𝛿𝐵√𝑆𝜆min
+2(𝐻−ℎ)𝑅max2
+𝐸)
+≤2𝑚𝐶exp{−2𝐸log 100𝑚
+𝐸}=2𝑚𝐶exp{−2 log 100𝑚}≤0.0002𝐶
+𝑚
+For the second term we proceed similarly by observing that for binary entropy function we have ℎ(𝑞)≤6/5√𝑞
+for𝑞 >0, which gives:
+𝑚𝐶ℎ 
+2 exp(
+−2
+𝑎−𝛿𝐵√𝑆𝜆min
+2(𝐻−ℎ)𝑅max2
+𝐸)!
+≤𝑚𝐶ℎ(0.0002
+𝑚2)≤6
+5𝐶√
+0.0002≤0.02𝐶
+Hence we get that:
+𝐼(𝑌,𝑉)≤0.01𝐶+0.0002𝐶
+𝑚+0.02𝐶≤0.04𝐶≤0.10𝐶
+We can now obtain an inequality similar to the one in Equation 5 and proceed as in the proof of Theorem
+3.3 mutatis mutandis, which completes the proof.
+17Under review as submission to TMLR
+D Proof of Theorem 5.2
+Theorem 5.2 In a distributed linear value function approximation problem with context dimensionality of
+𝐶 > 12, state space size of 𝑆≤𝐶and discount factor of 0< 𝛾 < 0.99, under assumptions 3.1, 4.1 and
+5.1, given𝑚processing centres each with gameplay history, with each centre having a communication budget
+𝐵≥1, the minimax risk 𝑀of any algorithm is lower bounded as:
+𝑀≥Ω 
+𝐶𝑅2
+max
+(1−𝛾)2𝜋max𝑆𝑛𝑚𝜆 minmin(
+maxn𝐶log𝑚
+𝐵,1o
+,𝑚
+log𝑚)!
+Proof D.1 We consider the following MDP: from each state 𝑖, regardless of the agent’s action it either
+states in the same state with probability 1−𝑝and receives a reward 𝑟𝑗with a mean of ¯𝑟𝑗or moves to any
+other states chosen with a probability of𝑝
+𝑆−1and receives a reward 𝑟0. We see that because of the consistency
+equation for value functions we have:
+𝑣(𝑖)=(1−𝑝)¯𝑟𝑖+𝑝𝑟0+𝛾∑︁
+𝑠′∈𝑆{𝑖}𝑣(𝑠′)𝑝
+𝑆−1+𝛾𝑣(𝑖)(1−𝑝)
+Similarily as in previous proofs, we set the 𝑘-th element of context vector for the 𝑖th state as𝑐𝑖,𝑘=√𝜆min𝑆𝟙𝑘=𝑖
+so that Assumption 3.2 is satisfied. We also set the 𝑘th element of parameter vector to be 𝜃𝑘=𝛿𝑣𝑘, where
+𝑣𝑘is sampled uniformly from {−1,1}. We now set 𝑟0=−𝛾Í
+𝑠′∈𝑆{𝑖}𝑣(𝑠′)
+𝑆−1to get that:
+𝑣(𝑖)=(1−𝑝)¯𝑟𝑖+𝛾𝑣(𝑖)(1−𝑝)
+¯𝑟𝑖=𝑣(𝑖)(1−𝛾+𝑝𝛾)
+1−𝑝
+For states𝑖 >𝐶we can just deterministicaly set 𝑟𝑖=0, for other states we get that:
+¯𝑟𝑖=√𝜆min𝑆(1−𝛾+𝑝𝛾)
+1−𝑝
+We now set 𝑟𝑖=1
+99(2𝑝𝑖−1)𝑅maxwhere𝑝𝑖∼Bernoulli(1
+2+99√𝜆min𝑆𝑣𝑘𝛿
+2𝑅max1−𝛾+𝑝𝛾
+1−𝑝). We see that under this
+construction expected return from each state is c𝑇θand|𝑟𝑖| ≤𝑅max. Since under this construction the
+maximum value of the value function for any state 𝑠is𝑣(𝑠)≤0.99𝑅max
+1−𝛾, we also have that |𝑟0|≤𝛾0.99𝑅max
+1−𝛾≤
+𝑅max. We thus have a similar situation as in the proof of Theorem 4.3, where the data received can be reduced
+to outcomes of Bernoulli trials. Same as in that proof, we can show that the likelihood ratio given 𝑣𝑘=−𝑣′
+𝑘
+is bounded by expn
+17√𝑆𝜆min𝛿𝑣𝑘
+8𝑅max1−𝛾+𝑝𝛾
+1−𝑝Í𝑁𝑘
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘o
+, where𝑁𝑘is the number of visits to state 𝑘in gameplay
+history. We notice that the mean ofÍ𝑁𝑘
+𝑙=1𝑝𝑙
+𝑘−𝑛𝑙
+𝑘is𝜇𝑘=99𝛿𝜋(𝑘)𝑛𝑣𝑘√𝑆𝜆min
+𝑅max1−𝛾+𝑝𝛾
+1−𝑝and we can derive a similar
+Hoeffding bound as in Equation 7 with 𝑛variables confined to [0,1], where if𝑁𝑘< 𝑛for the last 𝑁𝑘−𝑛
+variables we set 𝑝𝑙
+𝑘=𝑛𝑙
+𝑘=0. This gives us the following inequality:
+𝑃(𝐸𝑘=0)≤2 exp(
+−2
+𝑎−𝛿99𝑛𝜋(𝑘)√𝑆𝜆min
+𝑅max1−𝛾+𝑝𝛾
+1−𝑝2
+𝑛)
+We can also develop a bound on KL divergence. We denote by 𝑃𝑘all𝑝𝑙
+𝑘for𝑙=1,...,𝑁𝑘and note that
+through convexity of KL divergence we get:
+KL[𝑝(𝑃𝑘|𝑣),𝑝(𝑃𝑘|𝑣∗)]≤𝑛∑︁
+𝑁𝑘=1KL[𝑝(𝑃𝑘|𝑣,𝑁𝑘),𝑝(𝑃𝑘|𝑣∗,𝑁𝑘)]𝑝(𝑁𝑘)
+Since distribution of 𝑃𝑘is Binomial( 𝑛,𝜋(𝑘)) we get:
+KL[𝑝(𝑃𝑘|𝑣),𝑝(𝑃𝑘|𝑣∗)]≤𝑛∑︁
+𝑁𝑘=1𝑝(𝑁𝑘)log1
+2+𝑞
+1
+2−𝑞
+𝑁𝑘𝑞
+18Under review as submission to TMLR
+Where we used 𝑞=99√𝜆min𝑆𝑣𝑘𝛿
+2𝑅max1−𝛾+𝑝𝛾
+1−𝑝. Same as before we use the fact that for 𝑥 <1
+4we have that1+𝑥
+1−𝑥≤
+exp{17
+8𝑥}:
+KL[𝑝(𝑃𝑘|𝑣),𝑝(𝑃𝑘|𝑣∗)]≤17
+8𝑞2𝑛∑︁
+𝑁𝑘=1𝑝(𝑁𝑘)𝑁𝑘=17
+8𝑞2𝑛𝜋(𝑘)≤17
+8𝑞2𝑛𝜋max
+From Lemma A.2 with 𝑑=𝐶and𝑅𝑘=𝑃𝑘we get:
+𝐼(𝑌,𝑉)≤𝐶𝑚
+217
+899√𝜆min𝑆𝑣𝑘𝛿
+2𝑅max1−𝛾+𝑝𝛾
+1−𝑝2
+𝑛𝜋max
+Proceeding as in the proof of Theorem 4.3 mutandits mutatis we get that:
+𝐼(𝑌,𝑉)≤17𝛿2𝑚𝑆𝜆 min
+8𝑅2max1−𝛾+𝑝𝛾
+1−𝑝2
+minn17
+8𝑎2𝐵,𝐶𝑛𝜋 max
+2o
++
++𝐶𝑚ℎ 
+2 exp(
+−2
+𝑎−𝛿𝑛𝜋(𝑘)√𝑆𝜆min
+𝑅max1−𝛾+𝑝𝛾
+1−𝑝2
+𝑛)!
++𝐶𝑚2 exp(
+−2
+𝑎−𝛿𝑛𝜋(𝑘)√𝑆𝜆min
+𝑅max1−𝛾+𝑝𝛾
+1−𝑝2
+𝑛)
+Hence we can set:
+𝑎∝√︁
+𝑛𝜋maxlog𝑚
+𝛿2
+𝑎∝𝐶𝑅2
+max
+𝑚𝜆min𝑆min{𝐵𝑎2,𝐶𝑛𝜋 max}1−𝛾+𝑝𝛾
+1−𝑝2
+𝛿2
+𝑏∝𝑅2
+max
+𝑛𝑆𝜋 max𝜆minlog𝑚1−𝛾+𝑝𝛾
+1−𝑝2
+𝛿=min{𝛿𝑎,𝛿𝑏}
+Proceeding similarly as in the proof of Theorem 4.3 we get:
+𝑀≥Ω 
+𝐶𝑅2
+max(1−𝑝)2
+(1−𝛾+𝑝𝛾)2𝑆𝜋max𝑛𝑚𝜆 minmin(
+maxn𝐶log𝑚
+𝐵,1o
+,𝑚
+log𝑚)!
+We observe that the bound gets tighter as 𝑝→0. We can now index distributions for 𝑟𝑖with𝑝and observe
+that since the bound is defined as a supremum over the set of considered distributions, we get the statement
+of the Theorem.
+E Proof of Theorem 3.5
+Theorem 3.5 Let us define θ=(θ1,...,θ𝐴)to be the concatenated parameter vector for all actions. For
+any value ofθ, Algorithm 1 using transmission with precision 𝑃achieves a worst-case risk upper bounded as
+follows:
+𝑊 <O
+𝐴𝐶maxn𝑅2
+max
+𝑚𝑛𝜆 min,𝑃o
+Proof E.1 We start by assuming the transmission is lossless (i.e. the number of bits is infinite) and then
+study how the MSE changes when transmission introduces quantisation error. Using the bias variance de-
+composition, we get:
+MSE(ˆθ)=∑︁
+𝑎∈𝐴𝐶∑︁
+𝑘=1bias(ˆ𝜃𝑎,𝑘)2+∑︁
+𝑎∈𝐴𝐶∑︁
+𝑘=1Var(ˆ𝜃𝑎,𝑘)
+It is a well-known fact that for least-squares estimate, the bias is zero, hence bias (ˆ𝜃𝑖
+𝑎,𝑘)=0and their average
+ˆ𝜃𝑎,𝑘is also unbiased. Because of the properties of the variance of average values we get:
+MSE(ˆθ)=1
+𝑚∑︁
+𝑎∈𝐴𝐶∑︁
+𝑘=1Var(ˆ𝜃1
+𝑎,𝑘)
+19Under review as submission to TMLR
+Using eigendecomposition and singular value decomposition we get:
+𝑋𝑇
+𝑎𝑋𝑎=𝑄𝑇Λ𝑄
+𝑋𝑇
+𝑎=𝑄𝑇Σ𝑉𝑇
+Where we choose such 𝑄and𝑉such that all left and right singular vectors have a norm of 1. Since 𝑄is
+orthogonal, it follows that:
+ˆθ𝑖
+𝑎=(𝑄𝑇Λ𝑄)−1𝑄𝑇Σ𝑉𝑇=𝑄𝑇Λ−1𝑄𝑄𝑇Σ𝑉𝑇r𝑎=𝑄𝑇Λ−1Σ𝑉𝑇r𝑎
+Writing this equation in terms of matrix elements gives:
+ˆ𝜃𝑖
+𝑎,𝑘=𝐶∑︁
+𝑗=1𝑄𝑗,𝑘√︁𝜆𝑗
+𝜆𝑗𝑛∑︁
+𝑙=1𝑟𝑙
+𝑎𝑉𝑗,𝑙=𝐶∑︁
+𝑗=1𝑛∑︁
+𝑙=1𝑄𝑗,𝑘1√︁𝜆𝑗𝑟𝑙
+𝑎𝑉𝑗,𝑙≤𝐶∑︁
+𝑗=1𝑛∑︁
+𝑙=1𝑄𝑗,𝑘1√𝜆min𝑛𝑟𝑙
+𝑎𝑉𝑗,𝑙
+Where𝜆𝑖are the eigenvalues. The last inequality follows from Assumption 3.2. We can now easily bound
+the variance:
+Var(ˆ𝜃𝑖
+𝑎,𝑘)≤𝐶∑︁
+𝑗=1𝑛∑︁
+𝑙=1𝑄2
+𝑗,𝑘𝑉2
+𝑗,𝑙
+𝜆min𝑛Var(𝑟𝑙
+𝑎)
+We now observe that due to Popoviciu inequality and Assumption 3.1 we get: Var (𝑟𝑙
+𝑎)≤𝑅2
+max. This gives
+us:
+Var(ˆ𝜃𝑖
+𝑎,𝑘)≤𝑅2
+max
+𝜆min𝑛𝐶∑︁
+𝑗=1𝑄2
+𝑗,𝑘𝑛∑︁
+𝑙=1𝑉2
+𝑗,𝑙=𝑅2
+max
+𝜆min𝑛
+Where the last equality is due to singular vectors having norm of 1. Substituting this back into the equation
+for MSE, we get:
+𝑀𝑆𝐸(ˆθ)≤𝐴𝐶𝑅2
+max
+𝑚𝑛𝜆 min
+Using the fact that each component is quantised up to precision 𝑃, the max error introduced by quantisation
+is𝐴𝐶𝑃, hence:
+𝑀𝑆𝐸(ˆθ)≤O
+𝐴𝐶maxn𝑅2
+max
+𝑚𝑛𝜆 min,𝑃o
+F Proof of Theorem 5.4
+Theorem 5.4 The worst-case risk of Algorithm 3 run with a learning rate of 𝛼𝑡=𝛽
+Λ+𝑡
+𝜔with𝛽=2
+(1−𝛾)𝜔
+andΛ=16
+(1−𝛾)2𝜔is upper bounded as follows:
+𝑊≤O 
+max(max{𝑅2
+max
+𝑆𝜋min𝜆min𝑚,∥θ−1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+0∥2
+2}
+1+(1−𝛾)2𝑛,𝐶𝑃)!
+Proof F.1 We define ¯θ𝑡:=1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+𝑡to be the average vector from all machines at timestep 𝑡. Note that
+this vector is never actually created, except for the last step when we average all final results. We define 𝜔
+to be the smallest eigenvalue of the covariance matrix weighted by the stationary distribution, i.e. smallest
+eigenvalue ofÍ
+𝑠∈𝑆𝜋(𝑠)c𝑠c𝑇
+𝑠. By convexity of eigenvalues we have 𝑆𝜋min𝜆min≤𝜔≤𝜆min≤1. We can see
+that the averaged parameter vector must satisfy the following recursive relation:
+¯θ𝑡+1=1
+𝑚𝑚∑︁
+𝑖=1ˆθ𝑖
+𝑡+1=1
+𝑚𝑚∑︁
+𝑖=1[ˆθ𝑖
+𝑡+𝛼𝑡g𝑖
+𝑡]=¯θ𝑡+𝛼𝑡1
+𝑚𝑚∑︁
+𝑖=1g𝑖
+𝑡
+Hence we can write:
+𝔼[∥θ−¯θ𝑡+1∥2
+2]=𝔼[∥θ−¯θ𝑡∥2
+2]−2𝛼𝑡
+𝑚𝔼h𝑚∑︁
+𝑖=1(θ−¯θ𝑖
+𝑡)𝑇g𝑖
+𝑡i
++𝛼2
+𝑡𝔼[1
+𝑚2∥𝑚∑︁
+𝑖=1g𝑖
+𝑡∥2
+2]
+20Under review as submission to TMLR
+We now focus on the second term:
+2𝛼𝑡
+𝑚𝑚∑︁
+𝑖=1𝔼h
+(θ−¯θ𝑖
+𝑡)𝑇g𝑖
+𝑡i
+=2𝛼𝑡
+𝑚2𝑚∑︁
+𝑖=1𝑚∑︁
+𝑗=1𝔼h
+(θ−ˆθ𝑗
+𝑡)𝑇𝔼h
+g𝑖
+𝑡ˆθ𝑖
+𝑡ii
+using Lemma H.1 we have that
+2𝛼𝑡
+𝑚2𝑚∑︁
+𝑖=1𝑚∑︁
+𝑗=1𝔼h
+(θ−ˆθ𝑗
+𝑡)𝑇𝔼h
+g𝑖
+𝑡ˆθ𝑖
+𝑡ii
+≥2𝛼𝑡𝜔(1−𝛾)
+𝑚2𝔼h𝑚∑︁
+𝑖=1𝑚∑︁
+𝑗=1∥θ−θ𝑖
+𝑡∥2∥θ−θ𝑗
+𝑡∥2i
+We now decompose the third term, while using the notation ˆθ𝑡=(ˆθ1
+𝑡,..., ˆθ𝑚
+𝑡):
+𝔼[∥1
+𝑚𝑚∑︁
+𝑖=1g𝑖
+𝑡∥2
+2]=𝔼[𝔼[∥1
+𝑚𝑚∑︁
+𝑖=1g𝑖
+𝑡∥2
+2|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+]]
+=𝔼[1
+𝑚2𝑚∑︁
+𝑖=1𝑚∑︁
+𝑗=1𝔼[g𝑖
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+]𝑇𝔼[g𝑗
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+]+Tr(1
+𝑚2𝑚∑︁
+𝑖=1Var(𝑔𝑖
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+))]
+The expected value can be upper-bounded as follows:
+𝔼[g𝑖
+𝑡]=𝔼[(𝑟𝑖
+𝑡+𝛾(c𝑖
+𝑡+)𝑇θ𝑖
+𝑡−(c𝑖
+𝑡)𝑇θ𝑖
+𝑡)c𝑖
+𝑡]=
+=𝔼[(𝑟𝑖
+𝑡+𝛾(c𝑖
+𝑡+)𝑇θ−c𝑖
+𝑡θ+𝛾(c𝑖
+𝑡+)𝑇(θ𝑖
+𝑡−θ)−(c𝑖
+𝑡)𝑇(θ𝑖
+𝑡−θ))c𝑖
+𝑡]=
+=(𝔼[𝑟𝑖
+𝑡]+𝛾θ𝑇c𝑖
+𝑡+−θ𝑇c𝑖
+𝑡)c𝑖
+𝑡+(𝛾c𝑖
+𝑡+−c𝑖
+𝑡)𝑇(θ𝑖
+𝑡−θ)c𝑖
+𝑡
+By the definition of value function we have that 𝔼[𝑟𝑖
+𝑡]=θ𝑇c𝑖
+𝑡−𝛾θ𝑇c𝑖
+𝑡+. Hence the expression above simplifies
+to(𝛾c𝑖
+𝑡+−c𝑖
+𝑡)𝑇(θ𝑖
+𝑡−θ)c𝑖
+𝑡. We thus have:
+𝔼[𝑔𝑖
+𝑡]𝑇𝔼[𝑔𝑗
+𝑡]=(𝛾c𝑖
+𝑡+−c𝑖
+𝑡)𝑇(θ𝑖
+𝑡−θ)(c𝑖
+𝑡)𝑇c𝑗
+𝑡(𝛾c𝑗
+𝑡+−c𝑗
+𝑡)𝑇(θ𝑗
+𝑡−θ)≤
+≤∥𝛾c𝑖
+𝑡+−c𝑖
+𝑡∥2∥θ𝑖
+𝑡−θ∥2∥c𝑖
+𝑡∥2∥c𝑗
+𝑡∥2∥𝛾c𝑗
+𝑡+−c𝑗
+𝑡∥2∥θ𝑗
+𝑡−θ∥≤∥θ𝑖
+𝑡−θ∥2∥θ𝑗
+𝑡−θ∥2
+Finally, we also bound the variance:
+Var(𝑔𝑖
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+)=Var((𝑟𝑖
+𝑡+𝛾(θ𝑖
+𝑡)𝑇c𝑖
+𝑡+−(θ𝑖
+𝑡)𝑇c𝑖
+𝑡)c𝑖
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+)=Var(𝑟𝑖
+𝑡c𝑖
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+)≤
+≤c𝑖
+𝑡Var(𝑟𝑖
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+)(c𝑖
+𝑡)𝑇≤c𝑖
+𝑡(c𝑖
+𝑡)𝑇𝑅2
+max
+Hence we have:
+Tr(1
+𝑚2𝑚∑︁
+𝑖=1Var(𝑔𝑖
+𝑡|ˆθ𝑡,c𝑖
+𝑡,c𝑖
+𝑡+))≤𝑅2
+max
+𝑚
+Hence we obtain a recursive inequality:
+𝔼[∥θ−¯θ𝑡+1∥2
+2]≤𝔼[∥θ−¯θ𝑡∥2
+2]−
+− 
+2𝛼𝑡𝜔(1−𝛾)−𝛼2
+𝑡
+𝑚2!
+𝔼h𝑚∑︁
+𝑖=1𝑚∑︁
+𝑗=1∥θ−θ𝑖
+𝑡∥2∥θ−θ𝑗
+𝑡∥2i
++𝛼2
+𝑡
+𝑚𝑅2
+max
+We can now use a Lemma H.3 to get:
+𝔼[∥θ−¯θ𝑡+1∥2
+2]≤𝔼[∥θ−¯θ𝑡∥2
+2](1−2𝛼𝑡𝜔(1−𝛾)+𝛼2
+𝑡)+𝛼2
+𝑡
+𝑚𝑅2
+max
+We now set 𝛼𝑡=𝛽
+Λ+𝑡
+𝜔with𝛽=2
+(1−𝛾)𝜔andΛ=16
+(1−𝛾)2𝜔. We observe that since 𝛼𝑡≤(1−𝛾)𝜔we have that
+−2𝛼𝑡𝜔(1−𝛾)+𝛼2
+𝑡𝑅2
+max=𝛼𝑡𝜔(1−𝛾)(−2+𝛼𝑡𝑅2
+max
+𝜔(1−𝛾))≤𝛼𝑡𝜔(1−𝛾)(−2+1)=−𝛼𝑡𝜔(1−𝛾). Let us now define
+21Under review as submission to TMLR
+𝜈=max{𝛽2𝑅2
+max
+𝑚,Λ∥θ−1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+0∥2
+2}and observe that we have 𝔼[∥θ−¯θ0∥2
+2]≤𝜈
+Λ. Proceeding by induction,
+let us suppose that 𝔼[∥θ−¯θ𝑡∥2
+2]≤𝜈
+ˆ𝑡, where ˆ𝑡=𝜔𝑡+Λ. We then have:
+𝔼[∥θ−¯θ𝑡+1∥2
+2]≤𝔼[∥θ−¯θ𝑡∥2
+2](1−𝛼𝑡𝜔(1−𝛾))+𝛼2
+𝑡𝑅2
+max
+𝑚
+≤𝜈
+ˆ𝑡(1−𝛽𝜔(1−𝛾)
+ˆ𝑡)+𝑅2
+max𝛽2
+ˆ𝑡2𝑚=ˆ𝑡−1
+ˆ𝑡2𝜈+𝑅2
+max𝛽2
+𝑚−((1−𝛾)𝜔𝛽−1)𝜈
+ˆ𝑡2
+=ˆ𝑡−1
+ˆ𝑡2𝜈+𝑅2
+max𝛽2
+𝑚−𝜈
+ˆ𝑡2
+We now observe that by definition of 𝜈we have𝑅2
+max𝛽2
+𝑚≤𝜈and that ˆ𝑡2≥(ˆ𝑡−1)(ˆ𝑡+1). Thus we have:
+𝔼[∥θ−¯θ𝑡+1∥2
+2]≤𝜈
+ˆ𝑡+1≤𝜈
+ˆ𝑡+1
+𝜔
+By induction this proves that:
+𝔼[∥θ−¯θ∥2
+2]≤O 
+max(
+max{𝑅2
+max
+𝜔𝑚,∥θ−1
+𝑚Í𝑚
+𝑖=1ˆθ𝑖
+0∥2
+2}
+1+(1−𝛾)2𝑛,𝐶𝑃)!
+We now use the fact that 𝜔≤𝑆𝜋min𝜆minto get the statement of the Theorem.
+G Analysis of worst-case TD initial bias
+Given the average initial parameter value ˆθ0, assume we are faced with a problem where the features of states
+are chosen so that ˆθ0is an eigenvector of the 𝑋𝑇𝑋matrix with eigenvalue 𝜆min. We see that if we form
+vectoruconsisting of value function for each state we get ∥𝑢∥2
+2≤O(𝑆𝑅2
+max
+(1−𝛾)2). We choose the true parameter
+vectorθto be parallel to ˆθ0, hence∥𝑋𝑇θ∥2
+2≤𝜆min∥θ∥2
+2≤O(𝑆𝑅2
+max
+(1−𝛾)2). We thus have∥θ∥2
+2≤O(𝑆𝑅2
+max
+(1−𝛾)2𝜆min).
+We can now set θ=−ˆθ0and observe that we have ∥θ−ˆθ0∥2
+2=4∥θ∥2
+2≤O(𝑆𝑅2
+max
+(1−𝛾)2).
+H Lemmas for TD learning
+Within this appendix, we propose Lemma H.1, which is a more general version of Lemma 1 and 3 from
+Bhandari et al. (2018). We also propose Lemma H.3, which is a simple consequence of the triangle inequality.
+Both of these Lemmas consistute very useful tools for our analysis of distributed TD learning.
+Lemma H.1 For TD value function approximation problem in a MDP with discount factor 𝛾, with𝜔being
+the smallest eigenvalue of the feature matrix weighted by the stationary distribution, for 𝑔𝑖
+𝑡=(𝑟𝑡+𝛾c𝑇
+𝑡+ˆθ𝑖−
+c𝑇
+𝑡ˆθ𝑖)c𝑡being the gradient step, we have that:
+(θ−θ𝑖
+𝑡)𝑇𝔼[g𝑗
+𝑡|ˆθ𝑗
+𝑡]≥𝜔(1−𝛾)∥θ−θ𝑖
+𝑡∥2∥θ−θ𝑗
+𝑡∥2
+Proof H.2 Let us define 𝜉𝑖=(θ−ˆθ𝑖
+𝑡)c𝑖
+𝑡,𝜉′
+𝑖=(θ−ˆθ𝑖
+𝑡)c𝑖
+𝑡+and𝜉𝑖,𝑗=(θ−ˆθ𝑖
+𝑡)c𝑗
+𝑡. Observing that the expected
+gradient is zero at the optimal value of θwe get:
+𝔼[g𝑗
+𝑡|ˆθ𝑗
+𝑡]=𝔼[g𝑗
+𝑡|ˆθ𝑗
+𝑡]−𝔼[(𝑟𝑗
+𝑡+𝛾θ𝑇c𝑗
+𝑡+−θ𝑇c𝑗
+𝑡)c𝑡|ˆθ𝑗
+𝑡]=𝔼[c𝑗
+𝑡(𝛾c𝑗
+𝑡+−c𝑗
+𝑡)(ˆθ𝑗
+𝑡−θ)|ˆθ𝑗
+𝑡]=
+=𝔼[c𝑗
+𝑡(c𝑗
+𝑡−𝛾c𝑗
+𝑡+)|ˆθ𝑗
+𝑡]
+Hence we get:
+(θ−ˆθ𝑖
+𝑡)𝑇𝔼[g𝑗
+𝑡|ˆθ𝑗
+𝑡]=𝔼[𝜉𝑖,𝑗(𝜉𝑗−𝛾𝜉′
+𝑗)|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]=𝔼[𝜉𝑖,𝑗𝜉𝑗|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]−𝛾𝔼[𝜉𝑖,𝑗𝜉′
+𝑗|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]
+22Under review as submission to TMLR
+Sincec𝑗
+𝑡andc𝑖
+𝑡are independent we have that given estimate of parameter vectors 𝜉𝑖,𝑗and𝜉𝑗are also
+independent. Moreover by Cauchy-Schwarz we have that
+𝔼[𝜉𝑖,𝑗𝜉′
+𝑗|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]≤√︃
+𝔼[𝜉2
+𝑖,𝑗|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]𝔼[(𝜉′
+𝑗)2|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]
+. We now observe that:
+𝔼[𝜉𝑖,𝑗𝜉𝑗|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]=∑︁
+𝑠∈𝑆𝜋(𝑠)(θ−ˆθ𝑖
+𝑡)𝑇c𝑖
+𝑡(θ−ˆθ𝑗
+𝑡)𝑇c𝑖
+𝑡
+=(θ−ˆθ𝑖
+𝑡)𝑇Σ(θ−ˆθ𝑗
+𝑡)≤(θ−ˆθ𝑖
+𝑡)𝑇(θ−ˆθ𝑗
+𝑡)𝜔≤𝜔∥θ−ˆθ𝑖
+𝑡∥2∥θ−ˆθ𝑗
+𝑡∥2
+Moreover by similar argument we can show that: 𝔼[𝜉2
+𝑖,𝑗|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]≤𝜔∥θ−ˆθ𝑖
+𝑡∥2
+2and𝔼[𝜉2
+𝑗|ˆθ𝑗
+𝑡,ˆθ𝑖
+𝑡]≤𝜔∥θ−ˆθ𝑗
+𝑡∥2
+2
+which complete the proof.
+Lemma H.3∥θ−¯θ𝑡∥2
+2≤1
+𝑚2Í𝑚
+𝑖=1∥θ−ˆθ𝑖
+𝑡∥2Í𝑚
+𝑗=1∥θ−ˆθ𝑗
+𝑡∥2
+Proof H.4
+∥θ−¯θ𝑡∥2
+2=∥θ−1
+𝑚𝑚∑︁
+𝑖=1ˆθ𝑖
+𝑡∥2
+2=
+∥1
+𝑚𝑚∑︁
+𝑖=1(θ−ˆθ𝑖
+𝑡)∥22
+=1
+𝑚2
+∥𝑚∑︁
+𝑖=1(θ−ˆθ𝑖
+𝑡)∥22
+By triangle inequality we have:
+∥θ−¯θ𝑡∥2
+2≤1
+𝑚2𝑚∑︁
+𝑖=1∥(θ−ˆθ𝑖
+𝑡)∥22
+=1
+𝑚2𝑚∑︁
+𝑖=1𝑚∑︁
+𝑗=1∥(θ−ˆθ𝑖
+𝑡)∥2∥(θ−ˆθ𝑗
+𝑡)∥2
+23

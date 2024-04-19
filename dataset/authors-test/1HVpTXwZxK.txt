@@ -1,0 +1,2067 @@
+Under review as submission to TMLR
+Prior and Posterior Networks: A Survey on Evidential Deep
+Learning Methods For Uncertainty Estimation
+Anonymous authors
+Paper under double-blind review
+Abstract
+Popular approaches for quantifying predictive uncertainty in deep neural networks often
+involve multiple sets of weights or models, for instance, via ensembling or Monte Carlo
+dropout. These techniques usually incur overhead by having to train multiple model in-
+stances or do not produce very diverse predictions. This survey aims to familiarize the
+reader with an alternative class of models based on the concept of Evidential Deep Learn-
+ing: For unfamiliar data, they admit “what they don’t know” and fall back onto a prior
+belief. Furthermore, they allow uncertainty estimation in a single model and forward pass
+by parameterizing distributions over distributions . This survey recapitulates existing works,
+focusing on the implementation in a classification setting, before surveying the application
+of the same paradigm to regression. We also reflect on the strengths and weaknesses com-
+pared to each other as well as to more established methods and provide the most central
+theoretical results using a unified notation in order to aid future research.
+1 Introduction
+Figure1: Taxonomyofsurveyedapproaches. Formore
+detail about prior and posterior networks for classifi-
+cation, check Tables 1 and 2, respectively. See Table 3
+for all regression approaches.Many existing methods for uncertainty estimation
+leverage the concept of Bayesian model averag-
+ing, which approaches such as Monte Carlo (MC)
+dropout (Gal & Ghahramani, 2016), Bayes-by-
+backprop (Blundell et al., 2015) or ensembling (Lak-
+shminarayanan et al., 2017) can be grouped under
+(Wilson & Izmailov, 2020). This involves the ap-
+proximation of an otherwise infeasible to compute
+integral using MC samples — for instance from
+an auxiliary distribution or in the form of ensem-
+ble members. This causes the following problems:
+Firstly, the quality of the MC approximation de-
+pends on the veracity and diversity of samples from
+the weight posterior. Secondly, the approach often
+involves increasing the number of parameters in a
+model or training more model instances altogether.
+Recently, anewclassofmodelshasbeenproposedto
+side-step this conundrum by using a different factor-
+ization of the posterior predictive distribution. This
+allows computing uncertainty in a single forward
+pass and a single set of weights. Furthermore, these
+models are grounded in a concept coined Evidential
+Deep Learning : For out-of-distribution (OOD) in-
+puts, they fall back onto a prior, often expressed as
+knowing what they don’t know .
+1Under review as submission to TMLR
+In thispaper, we summarizethe existingliterature andgroup EvidentialDeep Learningapproaches, critically
+reflecting on their advantages and shortcomings. This survey aims to both serve as an accessible introduction
+to this model family to the unfamiliar reader as well as an informative overview, in order to promote a
+wider application outside the uncertainty estimation literature. We also provide a collection of the most
+important theoretical results for the Dirichlet distribution for Machine Learning, which plays a central role
+in many of the discussed approaches. We give an overview over all discussed work in Figure 1, where we
+distuinguish surveyed works for classification between models parameterizing a Dirichlet prior (Section 3.3.1)
+or posterior (Section 3.3.2). We further discuss similar methods for regression problems (Section 4). As we
+will see, obtaining well-behaving uncertainty estimates can be challenging in the Evidential Deep Learning
+framework; proposed solutions that are also reflected in Figure 1 are the usage of OOD examples during
+training (Malinin & Gales, 2018; 2019; Nandy et al., 2020; Shen et al., 2020; Chen et al., 2018; Zhao et al.,
+2019;Huetal.,2021;Sensoyetal.,2020), knowledgedistillation(Malininetal.,2020b;a)ortheincorporation
+of density estimation (Charpentier et al., 2020; 2021; Stadler et al., 2021), which we discuss in more detail
+in Section 6.
+2 Background
+We first introduce the central concepts to this survey, including Bayesian model averaging in Section 2.2 and
+Evidential Deep Learning in Section 2.3, along with a short introduction to the Dirichlet distribution we use
+to illustrate the relevant concepts behind Bayesian inference.
+2.1 The Dirichlet distribution
+Underlying the following sections is the concept of Bayesian inference: Given some prior belief p(θ)about
+parameters of interest θ, we use available observations Dand their likelihood p(D|θ)to obtain an updated
+belief in form of the posterior p(θ|D)∝p(D|θ)p(θ). Within Bayesian inference, the Beta distribution is a
+commonly used prior for a Bernoulli likelihood, which can e.g. be used in a binary classification problem.
+Whereas the Bernoulli likelihood has a single parameter µ, indicating the probability of success (or of the
+positive class), the Beta distribution posses two shape parameters α1andα2, and is defined as follows:
+Beta(µ;α1,α2) =1
+B(α1,α2)µα1−1(1−µ)α2−1;B(α1,α2) =Γ(α1)Γ(α2)
+Γ(α1+α2); (1)
+where Γ(·)stands for the gamma function, a generalization of the factorial to the real numbers, and B(·)is
+called the Beta function (not to be confused with the distribution). As such, the Beta distribution expresses
+aprobability over probabilities : That is, the probability of different parameter values for µ. The Dirichlet
+distribution arises as a multivariate generalization of the Beta distribution (and is thus also called the
+multi-variate Beta distribution ) for a multi-class classification problem and is defined as follows:
+Dir(µ;α) =1
+B(α)K/productdisplay
+k=1µαk−1
+k;B(α) =/producttextK
+k=1Γ(αk)
+Γ(α0);α0=K/summationdisplay
+k=1αk;αk∈R+; (2)
+whereKdenotes the number of categories or classes, and the Beta function B(·)is now defined for Kshape
+parameters compared to Equation (1). For notational convenience, we also define K={1,...,K}as the
+set of all classes. The distribution is characterized by its concentration parameters α, the sum of which,
+often denoted as α0, is called the precision .1The distribution becomes relevant for applications using neural
+networks, considering that most neural networks for classification use a softmax function after their last
+layer to produce a categorical distribution of classes Cat (µ) =/producttextK
+k=1µ1y=k
+k, in which the class probabilities
+are expressed using a vector µ∈[0,1]Ks.t.µk≡P(y=k|x)and/summationtext
+kµk= 1. The Dirichlet is a conjugate
+priorfor such a categorical likelihood, meaning that in combination they produce a Dirichlet posterior with
+parameters β, given a data set D={(xi,yi)}N
+i=1ofNobservations with corresponding labels:
+1The precision is analogous to the precision of a Gaussian, where a larger α0signifies a sharper distribution.
+2Under review as submission to TMLR
+(a) Categorical distributions pre-
+dicted by a neural ensemble on the
+probability simplex.
+(b) Probability simplex for a con-
+fident prediction, for with the den-
+sity concentrated in a single corner.
+(c) Dirichlet distribution for a case
+of data uncertainty, with the den-
+sity concentrated in the center.
+(d) Dirichlet distribution for a case
+of model uncertainty, with the den-
+sity spread out more.
+(e) Dirichlet for a case of distribu-
+tional uncertainty, with the density
+spread across the whole simplex.
+(f) Alternative approach to distri-
+butional uncertainty called repre-
+sentation gap, with density concen-
+trated along the edges.
+Figure 2: Examples of the probability simplex for a K= 3classification problem, where every corner
+corresponds to a class and every point to a categorical distribution. Brighter colors correspond to higher
+density. (a)Predictedcategoricaldistributionsbyanensembleofdiscriminators. (b)–(e)(Desired)Behavior
+of Dirichlet in different scenarios by Malinin & Gales (2018): (b) For a confident prediction, the density is
+concentrated in the corner of the simplex corresponding to the assumed class. (c) In the case of aleatoric
+uncertainty, the density is concentrated in the center, and thus uniform categorical distributions are most
+likely. (d) In the case of model uncertainty, the density may still be concentrated in a corner, but more
+spread out, expressing the uncertainty about the right prediction. (e) In the case of an OOD input, a
+uniform Dirichlet expresses that any categorical distribution is equally likely, since there is no evidence for
+any known class. (f) Representation gap by Nandy et al. (2020), proposed as an alternative behavior for
+OOD data. Here, the density is instead concentrated solely on the edges of the simplex.
+p(µ|D,α)∝p/parenleftbig
+{yi}N
+i=1|µ,{xi}N
+i=1/parenrightbig
+p(µ|α) =N/productdisplay
+i=1K/productdisplay
+k=1µ1yi=k
+k1
+B(α)K/productdisplay
+k=1µαk−1
+k
+=K/productdisplay
+k=1µ/parenleftbig/summationtextN
+i=11yi=k/parenrightbig
+k1
+B(α)K/productdisplay
+k=1µαk−1
+k=1
+B(α)K/productdisplay
+k=1µNk+αk−1
+k∝Dir(µ;β),(3)
+where βis a vector with βk=αk+Nk, withNkdenoting the number of observations for class kand1being
+the indicator function. Intuitively, this implies that the prior belief encoded by theinitial Dirichlet is updated
+using the actual data, sharpening the distribution for classes for which many instances have been observed.
+Similar to the Beta distribution in Equation (1), the Dirichlet is a distribution over categorical distributions
+3Under review as submission to TMLR
+on theK−1probability simplex; multiple instances of which are shown in Figure 2. Each point on the
+simplex corresponds to a categorical distribution, with the proximity to a corner indicating a high probability
+for the corresponding class. Figure 2a displays the predictions of an ensemble of classifiers as a point cloud
+on the simplex. Using a Dirichlet, this finite set of distributions can be extended to a continuous density
+over the whole simplex. As we will see in the following sections, parameterizing a Dirichlet distribution with
+a neural network enables us to distinguish different scenarios using the shape of its density, as shown in
+Figures 2b to 2f, which we will discuss in more detail along the way.
+2.2 Predictive Uncertainty in Neural Networks
+In probabilistic modelling, uncertainty is commonly divided into aleatoric and epistemic uncertainty (Der Ki-
+ureghian & Ditlevsen, 2009; Hüllermeier & Waegeman, 2021). Aleatoric refers to the uncertainty that is
+induced by the data-generating process, for instance noise or inherent overlap between observed instances of
+classes. Epistemic is the type of uncertainty about the optimal model parameters (or even hypothesis class),
+reducible with an increasing amount of data, as less and less possible models become a plausible fit. These
+two notions resurface when formulating the posterior predictive distribution for a new data point x:2
+P(y|x,D) =/integraldisplay
+P(y|x,θ)/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Aleatoricp(θ|D)/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Epistemicdθ. (4)
+Here, the first term captures the aleatoric uncertainty about the correct class based on the predicted categor-
+ical distribution, while the second one expresses uncertainty about the correct model parameters — the more
+data we observe, the more concentrated p(θ|D)should become for reasonable parameter values for θ. Since
+we integrate over the entire parameter space of θ, weighting each prediction by the posterior probability of
+its parameters to obtain the final result, this process is referred to as Bayesian model averaging (BMA). For
+a large number of real-valued parameters θlike in neural networks, this integral becomes intractable, and
+is usually approximated using Monte Carlo samples — with the aforementioned problems of computational
+overhead and approximation errors, motivating the approaches discussed in this survey.
+2.3 Evidential Deep Learning
+Basedonthementionedconcerns, Malinin&Gales(2018)thereforeproposetofactorizeEquation (4)further:
+p(y|x,D) =/integraldisplay/integraldisplay
+P(y|µ)/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Aleatoricp(µ|x,θ)/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Distributionalp(θ|D)/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Epistemicdµdθ≈/integraldisplay
+P(y|µ)p(µ|x,ˆθ)/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+p(θ|D)≈δ(θ−ˆθ)dµ.(5)
+In the last step, we replace p(θ|D)by a point estimate ˆθusing the Dirac delta function, i.e. a single trained
+neural network, to get rid of the intractable integral. Although another integral remains, retrieving the
+uncertainty from this predictive distribution actually has a closed-form analytical solution for the Dirichlet
+(see Section 3.2). The advantage of this approach is further that it allows us to distinguish uncertainty about
+a data point because it lies in a region of considerable class overlap (Figure 2c) from points coming from an
+entirely different data distribution (Figure 2e). It should be noted that restricting oneself to a point estimate
+of the parameters prevent the estimation of epistemic uncertainty like in earlier works through the weight
+posteriorp(θ|D), as discussed in the next section. However, there are works like Haussmann et al. (2019);
+Zhao et al. (2020) that combine both approaches.
+Definition The term Evidential Deep Learning (EDL) originates from the work of Sensoy et al. (2018)
+and is based on the Theory of Evidence (Dempster, 1968; Audun, 2018): Within the theory, belief mass is
+assignedtosetofpossiblestates, e.g.classlabels, andcanalsoexpressalackofevidence, i.e.a“Idon’tknow”.
+2Note that the predictive distribution in Equation (4) generalizes the common case for a single network prediction where
+P(y|x,θ)≈P(y|x,ˆθ). Mathematically, this is expressed by replacing the posterior p(θ|D)by a delta distribution as in
+Equation (5), where all probability density rests on a single parameter configuration.
+4Under review as submission to TMLR
+We can for instance generalize the predicted output of a neural classifier using the Dirichlet distribution,
+allowing to express a lack of evidence through a uniform Dirichlet (Figure 2e). This is different from a
+uniform categorical distribution, which does not distinguish an equal probability for all classes from the lack
+of evidence. For the purpose of this survey, we define Evidential Deep Learning as a family of approaches
+for which a neural network can fall back onto a uniform prior for unknown inputs. These networks do not
+parameterize likelihoods, but prior or posterior distributions instead. We will discuss their implementation
+for classification problems further in the next section, before discussing methods for regression in Section 4.
+3 Dirichlet Networks
+We will show in Section 3.1 how neural networks can parameterize Dirichlet distributions, while Section 3.2
+reveals how such parameterization can be exploited for efficient uncertainty estimation. The remaining
+sections enumerate different examples from the literature parameterizing either a prior (Section 3.3.1) or
+posterior Dirichlet distribution (Section 3.3.2) according to Equations (2) and (3).
+3.1 Parameterization
+For a classification problem with Kclasses, a neural classifier is usually realized as a function fθ:RD→RK,
+mapping an input x∈RDtologitsfor each class. Followed by a softmax function, this then defines a
+categorical distribution over classes with a vector µwithµk≡p(y=k|x,θ). The same architecture can be
+used without any major modification to instead parameterize a Dirichlet distribution, as in Equation (2).3
+In order to classify a data point x, a categorical distribution is created from the predicted concentration
+parameters of the Dirichlet as follows (this definition arises from the expected value, see Appendix B.1):
+α=fθ(x);µk=αk
+α0; ˆy= arg max
+k∈Kµ1,...,µK. (6)
+This process is very similar when parameterizing a Dirichlet posterior distribution, except that in the case
+of the posterior, a term corresponding to the observations per class Nkin Equation (3) is added to every
+concentration parameter as well.
+3.2 Uncertainty Estimation with Dirichlet Networks
+Let us now turn our attention to how to estimate the different notions of uncertainty laid out in Section 2.2
+within the Dirichlet framework. Although stated for the prior parameters α, the following methods can also
+be applied to the posterior parameters βwithout loss of generality.
+Data(aleatoric)uncertainty. Forthedatauncertainty, wecanevaluatetheexpectedentropyofthedata
+distribution p(y|µ)(similar to previous works like e.g. Gal & Ghahramani, 2016). As the entropy captures
+the “peakiness” of the output distribution, a lower entropy indicates that the model is concentrating all
+probability mass on a single class, while high entropy stands for a more uniform distribution — the model is
+undecided about the right prediction. For Dirichlet networks, this quantity has a closed-form solution (for
+the full derivation, refer to Appendix C.1):
+Ep(µ|x,ˆθ)/bracketleftbigg
+H/bracketleftig
+P(y|µ)/bracketrightig/bracketrightbigg
+=−K/summationdisplay
+k=1αk
+α0/parenleftbigg
+ψ(αk+ 1)−ψ(α0+ 1)/parenrightbigg
+(7)
+whereψdenotes the digamma function, defined as ψ(x) =d
+dxlog Γ(x), andHthe Shannon entropy.
+3The only thing to note here is that the every αkhas to be strictly positive, which can for instance be enforced by using an
+additional ReLU function (and adding a small value, e.g. like in Sensoy et al., 2020) on the output or predicting logαkinstead
+(Sensoy et al., 2018; Malinin & Gales, 2018).
+5Under review as submission to TMLR
+Model (epistemic) uncertainty. As we saw in Section 2.2, computing the model uncertainty via the
+weight posterior p(θ|D)like in Blundell et al. (2015); Gal & Ghahramani (2016); Smith & Gal (2018) is
+usually not done in the Dirichlet framework.4Nevertheless, a key property of Dirichlet networks is that
+epistemic uncertainty is expressed in the spread of the Dirichlet distribution (for instance in Figure 2 (d)
+and (e)). Therefore, the epistemic uncertainty can be quantified considering the concentration parameters
+αthat shape this very same distribution: Charpentier et al. (2020) simply consider the maximum αkas a
+score akin to the maximum probability score by Hendrycks & Gimpel, while Sensoy et al. (2018) compute it
+byK//summationtextK
+k=1(αk+ 1)or simplyα0(Charpentier et al., 2020). In both cases, the underlying intuition is that
+largerαkproduce a sharper density, and thus indicate increased confidence in a prediction.
+Distributional uncertainty. Another appealing property of this model family is being able to distinguish
+uncertainty due to model underspecification (Figure 2d) from uncertainty due to alien inputs (Figure 2e).
+In the Dirichlet framework, the distributional uncertainty can be quantified by computing the difference
+between the total amount of uncertainty and the data uncertainty, which can be expressed in terms of the
+mutual information between the label yand its categorical distribution µ:
+I/bracketleftig
+y,µ/vextendsingle/vextendsingle/vextendsinglex,D/bracketrightig
+=H/bracketleftbigg
+Ep(µ|x,D)/bracketleftig
+P(y|µ)/bracketrightig/bracketrightbigg
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Total Uncertainty−Ep(µ|x,D)/bracketleftbigg
+H/bracketleftig
+P(y|µ)/bracketrightig/bracketrightbigg
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Data Uncertainty(8)
+Given that E[µk] =αk
+α0(Appendix B.1) and assuming the point estimate p(µ|x,D)≈p(µ|x,ˆθ)to be
+sufficient (Malinin & Gales, 2018), we obtain an expression very similar to Equation (7):
+I/bracketleftig
+y,µ/vextendsingle/vextendsingle/vextendsinglex,D/bracketrightig
+=−K/summationdisplay
+k=1αk
+α0/parenleftbigg
+logαk
+α0−ψ(αk+ 1) +ψ(α0+ 1)/parenrightbigg
+(9)
+This quantity expresses how much information we would receive about µif we were given the label y,
+conditioned on the new input xand the training data D. In regions in which the model is well-defined,
+receivingyshould not provide much new information about µ— and thus the mutual information would
+be low. Yet, such knowledge should be very informative in regions in which few data have been observed,
+and there the mutual information would indicate higher model uncertainty.
+Note on epistemic uncertainty estimation The introduction of distributional uncertainty, a notion
+that is non-existent in the Bayesian Model Averaging framework, warrants a note on the estimation of
+epistemic uncertainty estimation in general. Firstly, in Evidential Deep Learning, model uncertainty is no
+longer estimated via the uncertainty in learnable model parameters, but instead through the parameters of
+the prior or posterior distribution. Furthermore, distinguishing epistemic from distributional uncertainty
+allows to differentiate uncertainty due to underspecification from uncertainty due to a lack of evidence. In
+BMA, these notions are indistinguishable: In theory, model uncertainty on OOD should be high since the
+model is underspecified on them, however empirical works have shown this to not always be the case (Ulmer
+et al., 2020; Ulmer & Cinà, 2021; Van Landeghem et al., 2022). In both cases, it is impossible to estimate the
+uncertainty induced by a misspecified model class, which is why approaches using auxiliary models directly
+predicting the model uncertainty have been proposed (Jain et al., 2021).
+3.3 Existing Approaches for Dirichlet Networks
+Being able to quantify aleatoric, epistemic and distributional uncertainty in one forward pass and in closed
+form are desirable traits, as they simplify the process of obtaining different uncertainty scores. However,
+it is important to note that the behaviors of the Dirichlet distributions in Figure 2 are idealized. In the
+empirical risk minimization framework that neural networks are usually trained in, Dirichlet networks are
+4With exceptions such as Haussmann et al., 2019; Zhao et al., 2020). When the distribution over parameters in Equation (5)
+is retained, alternate expressions of the aleatoric and epistemic uncertainty are derived by (Woo, 2022).
+6Under review as submission to TMLR
+Table 1: Overview over prior networks for classification. (∗)OOD samples were created inspired by the
+approach of Liang et al. (2018). ID: Using in-distribution data samples.
+Method Loss function Architecture Requires
+OOD samples?
+Prior network
+(Malinin & Gales, 2018)ID KL w.r.t smoothed label &
+OOD KL w.r.t. uniform priorMLP / CNN ✓
+Prior networks
+(Malinin & Gales, 2019)Reverse KL of Malinin & Gales (2018) CNN ✓
+Information Robust Dirichlet Networks
+(Tsiligkaridis, 2019)lpnorm w.r.t one-hot label &
+Approx. Rényi divergence
+w.r.t. uniform priorCNN ✗
+Dirichlet via Function Decomposition
+(Biloš et al., 2019)Uncertainty Cross-entropy &
+mean & variance regularizerRNN ✗
+Prior network with PAC Regularization
+(Haussmann et al., 2019)Negative log-likelihood loss +
+PAC regularizerBNN ✗
+Ensemble Distribution Distillation
+(Malinin et al., 2020b)Knowledge distillation objective MLP / CNN ✗
+Prior networks with representation gap
+(Nandy et al., 2020)ID & OOD Cross-entropy +
+precision regularizerMLP / CNN ✓
+Prior RNN (Shen et al., 2020) Cross-entropy + entropy regularizer RNN ( ✓)∗
+Graph-based Kernel Dirichlet distribution
+estimation (GKDE) (Zhao et al., 2020)l2norm w.r.t. one-hot label &
+KL reg. with node-level distance prior &
+Knowledge distillation objectiveGNN ✗
+not incentivized to behave in the depicted way per se. Thus, when comparing existing approaches for
+parameterizingDirichletpriors(Section3.3.1)andposteriors(Section3.3.2),5wemainlyfocusonthedifferent
+ways in which authors try to tackle this problem by means of loss functions and training procedures. We
+give an overview over the discussed works in Tables 1 and 2 in the respective sections. For additional details,
+we refer the reader to Appendix B for general derivations concerning the Dirichlet distribution. We dedicate
+Appendix C to more extensive derivations of the different loss functions and regularizers and give a detailed
+overview over their mathematical forms in Appendix D.
+3.3.1 Prior Networks
+The key challenge in training Dirichlet networks is to ensure both high classification performance and the
+intended behavior under foreign data inputs. For this reason, most discussed works follow a loss function
+design using two parts: One optimizing for task accuracy for the former goal, the other one for a flat Dirichlet
+distribution for the latter, as flatness suggests a lack of evidence. To enforce flatness, the predicted Dirichlet
+is compared to the target distribution using some probabilistic divergence measure. We divide prior networks
+into two groups: Approaches using additional OOD data for this purpose ( OOD-dependent approaches ), and
+those without that necessity ( OOD-free approaches ).
+OOD-free approaches Apart from a standard negative log-likelihood loss (NLL) like used in Haussmann
+et al. (2019), one simple approach in optimizing the model is to impose a lp-loss between the one-hot
+encoded label yand the categorical distribution µ. Tsiligkaridis (2019) show that since the values of µin
+turn depend directly on the predicted concentration parameters α, the generalized (upper bound to the)
+loss can be derived to be the following (see the full derivation is given in Appendix C.3):
+5Even though the term priorand posterior network have been coined by Malinin & Gales (2018) and Charpentier et al.
+(2020) for their respective approaches, we use them in the following as an umbrella term for all methods targeting a prior or
+posterior distribution.
+7Under review as submission to TMLR
+Ep(µ|x,θ)/bracketleftbig
+||y−µ||p/bracketrightbig
+≤/parenleftbiggΓ(α0)
+Γ(α0+p)/parenrightbigg1
+p
+Γ/parenleftig/summationtext
+k̸=yαk+p/parenrightig
+Γ/parenleftig/summationtext
+k̸=yαk/parenrightig+/summationdisplay
+k̸=yΓ(αk+p)
+Γ(αk)
+1
+p
+Since the sum over concentration parameters excludes the one corresponding to the gold label, this loss can
+be seen as reducing the density on the areas of the probability simplex that do not correspond to the target
+class. Zhao et al. (2020) specifically utilize the l2loss, which has the following form (see Appendix C.4):
+Ep(µ|x,θ)/bracketleftig
+||y−µ||2
+2/bracketrightig
+=K/summationdisplay
+k=1/parenleftig
+1y=k−αk
+α0/parenrightig2
++αk(α0−αk)
+α2
+0(α0+ 1)
+where 1denotes the indicator function. Since αk/α0≤1, we can see that the term with the indicator
+functions penalizes the network when the concentration parameter αkcorresponding to the correct label does
+not exceed the others. The remaining aspect lies in the regularization: For reliable predictive uncertainty,
+the density associated with incorrect classes should be reduced. One such option is to increase the Kullback-
+Leibler divergence w.r.t. a uniform Dirichlet (see Appendix B.3):
+KL/bracketleftig
+p(µ|α)/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|1)/bracketrightig
+= logΓ(K)
+B(α)+K/summationdisplay
+k=1(αk−1)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbig
+Since Zhao et al. (2020) apply their model to graph structures, they do not increase the divergence to
+a uniform Dirichlet, but incorporate information about the local graph neighborhood into the reference
+distributionbyconsideringthedistanceandlabelofclosenodes.6Nevertheless, wewillseetheKL-divergence
+w.r.t. a uniform Dirichlet be used by many of the following works. Other divergence measures are also
+possible: Tsiligkaridis (2019) instead use a local approximation of the Rényi divergence.7First, the density
+for the correct class is removed from the Dirichlet by creating ˜α= (1−y)·α+y. Then, the remaining
+concentration parameters are encouraged towards uniformity by the divergence
+Rényi/bracketleftig
+p(µ|˜α)/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|1)/bracketrightig
+≈1
+2/bracketleftig/summationdisplay
+k̸=y/parenleftbig
+αk−1/parenrightbig2/parenleftbig
+ψ(1)(αj)−ψ(1)(˜α0)/parenrightbig
+−ψ(1)(˜α0)/summationdisplay
+k̸=k′
+k̸=y, k′̸=y/parenleftbig
+αk−1/parenrightbig/parenleftbig
+αk′−1/parenrightbig/bracketrightig
+where where ψ(1)denotes the first-order polygamma function, defined as ψ(1)(x) =d
+dxψ(x). Haussmann
+et al. (2019) derive an entirely different regularizer using Probably Approximately Correct (PAC) bounds
+from learning theory, that together with the negative log-likelihood gives a proven bound to the expected
+true risk of the classifier. Setting a scalar δallows to set the desired risk, i.e. the model’s expected risk is
+guaranteed to be the same or less than the derived PAC bound with a probability of 1−δ. For a problem
+withNavailable training data points, the following upper bound for the regularizer is presented:
+/radicaligg
+KL/bracketleftbig
+p(µ|α)/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|1)/bracketrightbig
+−logδ
+N−1
+We see that even from the learning-theoretic perspective, this method follows the intuition of the original
+KL regularizer. Haussmann et al. (2019) also admit that in this form, the regularizer does not allow for a
+6They also add another knowledge distillation term (Hinton et al., 2015) to their loss, for which the model tries to imitate
+the predictions of a vanilla Graph Neural Network that functions as the teacher network.
+7The Kullback-Leibler divergence can be seen as a special case of the Rényi divergence (van Erven & Harremoës, 2014),
+where the latter has a stronger information-theoretic underpinning.
+8Under review as submission to TMLR
+direct PAC interpretation anymore, but demonstrate its usefulness in their experiments. Summarizing all of
+the presented approaches thus far, we can see that they try to force to model to concentrate the Dirichlet’s
+density solely on the parameter corresponding to the right label — expecting a more flat density for difficult
+or unknown inputs. The latter behavior can also be achieved explicitly by training with OOD inputs in a
+series of works we discuss next.
+OOD-dependent approaches Note that before we were maximizing the KL-divergence to a uniform
+Dirichlet, in order to concentrate all the density in the correct corner of the probability simplex. Now,
+Malinin & Gales (2018) instead explicitly minimize the KL divergence to a uniform Dirichlet on OOD data
+points. This way, the model is encouraged to be agnostic about its prediction in the face of unknown
+inputs. Further, they utilize another KL term to train the model on predicting the correct label instead
+of alpnorm, minimizing the distance between the predicted concentration parameters and the gold label.
+However, since only a gold labeland not a gold distribution is available, they create one by re-distributing
+some of the density from the correct class onto the rest of the simplex (see Appendix D for full form). In
+their follow-up work, Malinin & Gales (2019) argue that the asymmetry of the KL divergence as the main
+objective creates unappealing properties in producing the correct behavior of the predicted Dirichlet, since
+it creates a multi- instead of unimodal target distribution. They therefore propose to use the reverse KL
+instead (see Appendix C.5 for the derivation). Nandy et al. (2020) refine this idea further, stating that even
+in with reverse KL training high epistemic and high distributional uncertainty (Figures 2d and 2e) might be
+confused, and instead propose novel loss functions producing a representation gap (Figure 2f), which aims
+to be more easily distinguishable. In this case, spread out densities signify epistemic uncertainty, whereas
+densities concentrated entirely on the edges of the simplex indicate distributional uncertainty. The way they
+achieve this goal is two-fold: In addition to minimizing the NLL loss on in-domain and maximizing the
+entropy on OOD examples, they also penalize the precision of the Dirichlet (see Appendix D for full form).
+Maximizing the entropy on OOD examples hereby serves the same function as minimizing the KL w.r.t to
+a uniform distribution, and can be implemented using the closed-form solution in Appendix B.2:
+H/bracketleftbig
+p(µ|α)/bracketrightbig
+= logB(α) + (α0−K)ψ(α0)−K/summationdisplay
+k=1(αk−1)ψ(αk)
+Knowledge distillation A way to forego the use of OOD examples while still using external information
+for regularization is to use knowledge distillation (Hinton et al., 2015). Here, the core idea lies in a student
+model learning to imitate the predictions of a more complex teacher model. Malinin et al. (2020b) exploit
+thisideaandshowthatpriornetworks canalsobedistilledusinganensembleof classifiers andtheirpredicted
+categorical distributions (akin to learning Figure 2e from Figure 2a), which does not require regularization
+at all, but comes at the cost of having to train an entire ensemble.
+Sequential models We identified two sequential applications of prior networks in the literature: For
+Natural Language Processing, Shen et al. (2020) train a recurrent neural network for spoken language
+understanding using a simple cross-entropy loss. Instead of using OOD examples for training, they aim
+maximizetheentropyofthemodelondatainputsgivenalearned,noisyversionofthepredictedconcentration
+parameters. Incomparison, Bilošetal.(2019)applytheirmodeltoasynchronouseventclassificationandnote
+that the standard cross-entropy loss only involves a point estimate of a categorical distribution, discarding
+all the information contained in the predicted Dirichlet. For this reason, they propose an uncertainty-aware
+cross-entropy (UCE) loss instead, which has a closed-form solution in the Dirichlet case (see Appendix C.6):
+LUCE=ψ(αy)−ψ(α0)
+Since their final concentration parameters are created using additional information from a class-specific
+Gaussian process, they further regularize the mean and variance for OOD data points using an extra loss
+term, incentivizing a loss mean and a variance corresponding to a pre-defined hyperparameter.
+9Under review as submission to TMLR
+(a)PosteriorNetwork(Charpentieretal.,2020).
+ (b) Natural Posterior Network (Charpentier et al., 2021).
+Figure 3: Schematic of the Posterior Network and Natural Posterior Network, taken from Charpentier et al.
+(2020; 2021), respectively. In both cases, an encoder fθmaps inputs to a latent representation z. NFs then
+model the latent densities, which are used together with the prior concentration to produce the posterior
+parameters. For x(1), its latent representation lies right in the modelled density of the first class, and thus
+receives a confident prediction. The latent z(2)lies between densities, creating aleatoric uncertainty. x(3)
+is an OOD input, is mapped to a low-density area of the latent space and thus produces an uncertain
+prediction. The differences in the two approaches is that the Posterior Network in (a) uses one NF per
+class, while only one NF is used in (b). Furthermore, (b) constitutes a generalization to different exponential
+family distributions, and is not restricted to classification problems (see main text for more detail).
+Table 2: Overview over posterior networks for classification. OOD samples were created via (†)the fast-sign
+gradient method (Kurakin et al.), using a (‡)Variational Auto-Encoder (VAE; Kingma & Welling, 2014 or
+a(§)Wasserstein GAN (WGAN; Arjovsky et al., 2017). NLL: Negative log-likelihood. CE: Cross-entropy.
+Method Loss function Architecture Requires
+OOD samples?
+Evidential Deep Learning
+(Sensoy et al., 2018)l2norm w.r.t. one-hot label +
+KL w.r.t. uniform priorCNN ✗
+Regularized ENN
+Zhao et al. (2019)l2norm w.r.t. one-hot label +
+Uncertainty regularizer on OOD/ difficult samplesMLP / CNN ✓
+WGAN–ENN
+(Hu et al., 2021)l2norm w.r.t. one-hot label +
+Uncertainty regularizer on synth. OODMLP / CNN +
+WGAN(✓)§
+Variational Dirichlet
+(Chen et al., 2018)ELBO +
+Contrastive Adversarial LossCNN ( ✓)†
+Belief Matching (Joo et al., 2020) ELBO CNN ✗
+Posterior Networks
+(Charpentier et al., 2020)Uncertainty CE (Biloš et al., 2019)
++ Entropy regularizerMLP / CNN +
+Norm. Flow✗
+Graph Posterior Networks
+(Stadler et al., 2021)Same as Charpentier et al. (2020) GNN ✗
+Generative Evidential Neural Networks
+(Sensoy et al., 2020)Contrastive NLL + KL between
+uniform & Dirichlet of wrong classesCNN ( ✓)‡
+3.3.2 Posterior Networks
+AselaboratedoninSection2.1, choosingaDirichletprior, duetoitsconjugacytothecategoricaldistribution,
+induces a Dirichlet posterior distribution. Like the prior in the previous section, this posterior can be
+parameterized by a neural network. The challenges hereby are two-fold: Accounting for the number of class
+observations Nkthat make up part of the posterior density parameters β(Equation (3)), and, similarly
+to prior networks, ensuring the wanted behavior on the probability simplex for in- and out-of-distribution
+10Under review as submission to TMLR
+inputs. Sensoy et al. (2018) base their approach on the Dempster-Shafer theory of evidence (Yager & Liu,
+2008; lending its name to the term “Evidential Deep Learning”) and its formalization via subjective logic
+(Audun, 2018). In doing so, an agnostic belief in form of a uniform Dirichlet prior ∀k:αk= 1is updated
+usingpseudo-counts Nk, whicharepredictedbyaneuralnetwork. Thisisdifferentfrompriornetworks, where
+the concentration parameters are predicted instead. In both cases, this does not require any modification to
+a model’s architecture except for replacing the softmax output function by a ReLU (or similar). Sensoy et al.
+(2018) train their model using the same techniques presented in the previous section: The main objective
+is thel2loss, penalizing the difference between the predicted Dirichlet and the one-hot encoded class label
+(Appendix C.4), and the KL divergence w.r.t. a uniform Dirichlet is used for regularization.
+Generating OOD samples using generative models Since OOD examples are not always readily
+available, several works try to create artificial samples using deep generative models. Hu et al. (2021) train
+a Wasserstein GAN (Arjovsky et al., 2017) to generate OOD samples, on which the network’s uncertainty
+is maximized. The uncertainty is given through vacuity, defined as K//summationtext
+kβk. In a follow-up work, Sensoy
+et al. (2020) similarly train a model using a contrastive loss with artificial OOD samples from a Variational
+Autoencoder (Kingma & Welling, 2014), and a KL-based regularizer similar to that of Tsiligkaridis (2019),
+where the density for posterior concentration parameters βkthat do not correspond to the gold label are
+pushed to the uniform distribution.
+Posterior networks via Normalizing Flows Charpentier et al. (2020) also set αto a uniform prior,
+but obtain the pseudo-observations Nkin a different way: Instead of a model predicting them directly, Nk
+is determined by the number of examples of a certain class in the training set. This quantity is further
+modified in the following way: An encoder model fθproduces a latent representation zof some input. A
+(class-specific) normalizing flow8(NF; Rezende & Mohamed, 2015) then assigns a probability to this latent
+representation, which is used to weight Nk:
+βk=αk+Nk·p(z|y=k,ϕ);z=fθ(x)
+ThishastheadvantageofproducinglowprobabilitiesforstrangeinputslikethenoiseasdepictedinFigure3a,
+which in turn translate to low concentration parameters of the posterior Dirichlet, as it falls back onto the
+uniform prior. The model is optimized using the same uncertainty-aware cross-entropy loss as in Biloš
+et al. (2019) with an additional entropy regularizer, encouraging density only around the correct class. This
+scheme is also applied to Graph Neural Networks by Stadler et al. (2021): In order to take the neighborhood
+structure of the graph into account, the authors also use a Personalized Page Rank scheme to diffuse node-
+specific posterior parameters βbetween neighboring nodes. The Page Rank scores, reflecting the importance
+of a neighboring node to the current node, can be approximated using power iteration (Klicpera et al., 2019)
+and used to aggregate the originally predicted concentration parameters βon a per-node basis.
+Charpentier et al. (2021) generalize the posterior network approach for exponential family distributions.
+Akin to the update for the posterior Dirichlet parameters, they formulate a general Bayesian update rule as
+χpost
+i=npriorχprior+niχi
+nprior+ni;zi=fθ(xi);ni=N·p(z|ϕ);χi=gψ(xi) (10)
+χhere denotes the distributional parameters and nthe evidence. Thus, posterior parameters for a sample
+xiare obtained by updating the prior parameter and some prior evidence by some input-dependent pseudo-
+evidenceni,χi: Again, given a latent representation by an encoder z, a (this time single) normalizing flow
+predictedni=NH·p(z|ϕ)basedonsomepre-definedcertaintybudget NH,9andparameters χiarepredicted
+8A NF is a generative model, estimating a density in the feature space by mapping it to a Gaussian in a latent space by a
+series of invertible, bijective transformations. The probability of an input can then be estimated by calculating the probability
+of its latent encoding under that Gaussian and applying the change-of-variable formula, traversing the flow in reverse. Instead
+of mapping from the feature space into latent space, the flows in Charpentier et al. (2020) map from the encoder latent space
+into a separate, second latent space.
+9The certainty budget can simply be set to the number of available datapoints, however Charpentier et al. (2021) suggest
+to set it to logNH=1
+2/parenleftbig
+Hlog(2π) + log(H+ 1)/parenrightbig
+to better scale with the dimensionality of the latent space H.
+11Under review as submission to TMLR
+Table 3: Overview over Evidential Deep Learning methods for regression.
+Method Parameterized
+distributionLoss function Model
+Deep Evidential Regression
+(Amini et al., 2020)Normal-Inverse
+Gamma PriorNegative log-likelihood loss + KL
+w.r.t. uniform priorMLP / CNN
+Deep Evidential Regression
+with Multi-task Learning
+(Oh & Shin, 2021)Normal-Inverse
+Gamma PriorLike Amini et al. (2020), with additional
+Lipschitz-modified MSE lossMLP / CNN
+Multivariate Deep Evidential
+Regression (Meinert & Lavin, 2021)Normal-Inverse
+Wishart PriorLike Amini et al. (2020), but tying two
+predicted params. instead of using a regularizerMLP
+Regression Prior Network
+(Malinin et al., 2020a)Normal-Wishart Prior Reverse KL
+(Malinin & Gales, 2019)MLP / CNN
+Natural Posterior Network
+(Charpentier et al., 2021)Inverse-χ2Posterior Uncertainty Cross-entropy (Biloš et al., 2019)
++ Entropy regularizerMLP / CNN +
+Norm. Flow
+by an additional network χi=gψ(z), see Figure 3b. For classification, nprior= 1andχpriorcorresponds
+to the uniform Dirichlet, while χiare concentration parameters predicted by an output layer based on the
+input’s latent encoding. We will discuss the same method applied to regression in the next section.
+Posterior networks via variational inference Another route lies in directly parameterizing the poste-
+rior parameters β. Given a target distribution defined by a uniform Dirichlet prior plus the number of times
+an input is associated with a specific label, Chen et al. (2018) optimize a distribution matching objective, i.e.
+the KL-divergence between the posterior parameters predicted by a neural network and the target distribu-
+tion. Since this objective is intractable to optimize directly, this leaves us to instead model an approximate
+posterior using variational inference methods, which is exactly the approach of Joo et al. (2020) and Chen
+et al. (2018). As the KL divergence between the true and approximate posterior is infeasible to estimate,
+the variational methods usually optimizes the evidence lower bound (ELBO) instead:
+LELBO =ψ(βy)−ψ(β0)/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+UCE loss−logB(β)
+B(γ)+K/summationdisplay
+k=1(βk−γk)/parenleftbig
+ψ(βk)−ψ(β0)/parenrightbig
+/bracehtipupleft /bracehtipdownright/bracehtipdownleft /bracehtipupright
+KL-divergence
+in which we can identify to consist of the uncertainty-aware cross-entropy loss used by Biloš et al. (2019);
+Charpentier et al. (2020; 2021) and the KL-divergence between two Dirichlets (Appendix B.3).
+4 Evidential Deep Learning for Regression
+Because the Evidential Deep Learning framework provides convenient uncertainty estimation, the question
+naturally arises of whether it can be extended to regression problems as well. The answer is affirmative,
+although the Dirichlet distribution is not an appropriate choice in this case. It is very common to model a
+regression problem using a normal likelihood (Bishop, 2006). As such, there are multiple potential choices
+for a prior distribution. The methods listed in Table 3 either choose the Normal-Inverse Gamma distribution
+(Amini et al., 2020; Charpentier et al., 2021), inducing a scaled inverse- χ2posterior (Gelman et al., 1995),10
+or as a Normal-Wishart prior (Malinin et al., 2020a). We will discuss these approaches in turn.
+Univariate regression Amini et al. (2020) model the regression problem as a normal distribution with
+unknown mean and variance N(y;µ,σ2), and use a normal prior for the mean with µ∼N (γ,σ2ν−1)and
+an inverse Gamma prior for the variance with σ2∼Γ−1(α,β), resulting in a combined Inverse-Gamma prior
+with parameters γ,ν,α,β, shown in Figure 4. These are predicted by different “heads” of a neural network.
+10The form of the Normal-Inverse Gamma posterior and the Normal Inverse- χ2posterior are interchangable using some
+parameter substitutions (Murphy, 2007).
+12Under review as submission to TMLR
+Figure 4: Example of an application of Evidential Deep Learning for regression, taken from Amini et al.
+(2020). The neural network predicts an Normal Inverse-Gamma prior, whose corresponding normal likeli-
+hoods display decreasing variance (and thus uncertainty) in the face of stronger evidence.
+For predictions, the expectation of the mean E[µ] =γ, and aleatoric and epistemic uncertainty can then be
+estimated using the expected value of the variance as well as the variance of the mean, respectively, which
+have closed form solutions under this parameterization:
+E[σ2] =β
+α−1;Var[µ] =β
+ν(α−1)
+The model is optimized using a negative log-likelihood objective, which can be analytically be shown to
+correspond to a Student’s t-distribution with γdegrees of freedom, mean β(1 +ν)/(να)and variance 2α:
+LNLL=1
+2log/parenleftigπ
+ν/parenrightig
+−αlog Ω +/parenleftig
+α+1
+2/parenrightig
+log/parenleftig
+(yi−γ)2ν+ Ω/parenrightig
++ log/parenleftbiggΓ(α)
+Γ(α+1
+2)/parenrightbigg
+(11)
+using Ω = 2β(1 +ν). Akin to the entropy regularizer for Dirichlet networks, Amini et al. (2020) propose a
+regularization term that concentrates density on the correct prediction:
+Lreg=|yi−γ|·(2ν+α) (12)
+SinceE[µ] =γis the prediction of the network, the second term in the product will be scaled by the degree
+to which the current prediction deviates from the target value. Since νandαcontrol the variances of the
+the mean and variances of the normal likelihood, this term encourages the network to decrease the evidence
+for mispredicted data samples. As Amini et al. (2020) point out, large amounts of evidence are not punished
+in cases where the prediction is close to the target. However, Oh & Shin (2021) argue that this combination
+of objective might create adverse incentives for the model during training: Since the difference between
+the prediction and target in Equation (11) is scaled by ν, the model could learn to increase the predictive
+uncertainty by decreasing νinstead of improving its prediction. They propose to ameliorate this issue by
+using a third loss term of the form
+LMSE=/braceleftigg
+(yi−γ)2if(yi−γ)2<Uν,α
+2/radicalbig
+Uν,α|yi−γ|−Uν,αif(yi−γ)2≥Uν,α(13)
+whereUν,αdenotes the minimum value for the uncertainty thresholds for ν,αgiven over a mini-batch, which
+are themselves defined as
+13Under review as submission to TMLR
+Uν=β(ν+ 1)
+αν;Uα=2β(ν+ 1)
+ν/bracketleftig
+exp/parenleftig
+ψ(α+1
+2)−ψ(α))−1/parenrightig/bracketrightig
+. (14)
+Theseexpressionareobtainedbytakingthederivatives ∂LNLL/∂ν,∂LNLL/∂αandsolvingfortheparameters,
+thus giving us the values for νandαfor which the loss gradients are maximal. In combination with
+Equation (13), Equation (14) ensures that should the model error exceed Uν,α, the error is rescaled and thus
+bounds the Lipschitz constant of the loss function, motivating the model to ensure the correctness of its
+prediction instead of increasing its uncertainty.
+Posterior networks for regression Another approach for regression is the Natural Posterior Network
+by Charpentier et al. (2021), which was already discussed for classification in Section 3.3.2. But since the
+proposed approach is a generalization for exponential family distributions, it can be applied to regression
+as well, using a Normal likelihood and Normal Inverse-Gamma prior as well. The Bayesian update rule in
+Equation (10) is adapted as follows: nis set ton=λ= 2α, and χ=/bracketleftbig
+µ0|µ2
+0+ 2β/n/bracketrightbigT. Feeding an
+input into the natural posterior network again first produces a latent encoding z, from which a NF predicts
+ni=NH·p(z|ϕ), and an additional network produces χi=gψ(z), which are used in Equation (10) to
+produce χpostandnpost, from which the parameters of the posterior Normal Inverse-Gamma can be derived.
+The authors also produce a general exponential family form of the UCE loss by Biloš et al. (2019), consisting
+of expected log-likelihood and an entropy regularizer, which they derive for the regression parameterization.
+Again, this approach relies on the density estimation capabilities of the NF to produce an agnostic belief
+about the right prediction for OOD examples (see Figure 3b).
+Multivariate evidential regression There are also some works offering solutions for multivariate re-
+gression problems: Malinin et al. (2020a) can be seen as another multivariate generalization of the work of
+Amini et al. (2020), where a combined Normal-Wishart prior is formed to fit the now Multivariate Normal
+likelihood. Again, the prior parameters are the output of a neural network, and uncertainty can be quantified
+in a similar way. For training purposes, they apply two different training objectives using the equivalent
+of the reverse KL objective of Malinin & Gales (2019) as well as of the knowledge distillation objective of
+Malinin et al. (2020b), which does not require OOD data for regularization purposes. Meinert & Lavin
+(2021) also provide a solution using a Normal Inverse-Wishart prior. In a similar vein to Oh & Shin (2021),
+they argue that the original objective proposed by Amini et al. (2020) can be minimized by increasing the
+network’s uncertainty instead of the decreasing the mismatch of its prediction. As a solution, they simply
+propose to tie βandνvia a hyperparameter.
+5 Related Approaches & Applications
+Existing approaches The need for the quantification of uncertainty in order to earn the trust of end-
+users and stakeholders has been a key driver for research (Bhatt et al., 2021). Unfortunately, standard neural
+discriminator architectures have been proven to possess unwanted theoretical properties w.r.t. OOD inputs11
+(Hein et al., 2019; Ulmer & Cinà, 2021) and lacking calibration in practice (Guo et al., 2017). A popular way
+to overcome these blemishes is by quantifying (epistemic) uncertainty by aggregating multiple predictions
+by networks in the Bayesian model averaging framework (Jeffreys, 1998; Wilson & Izmailov, 2020; Kristiadi
+et al., 2020; Daxberger et al., 2021; Gal & Ghahramani, 2016; Blundell et al., 2015; Lakshminarayanan et al.,
+2017). Nevertheless, many of these methods have been shown not to produce diverse predictions (Wilson &
+Izmailov, 2020; Fort et al., 2019) and to deliver subpar performance and potentially misleading uncertainty
+estimates under distributional shift (Ovadia et al., 2019; Masegosa, 2020; Wenzel et al., 2020; Izmailov et al.,
+2021a;b), raising doubts about their efficacy.
+Related Approaches Kull et al. (2019) found an appealing use of the Dirichlet distribution as a post-
+training calibration map. The proposed Posterior Network (Charpentier et al., 2020; 2021) can furthermore
+be seen as related to another, competing approach, namely the combination of neural discriminators with
+11Pearce et al. (2021) argue that some insights might partially be mislead by low-dimensional intuitions, and that empirically
+OOD data in higher dimensions tend to be mapped into regions of higher uncertainty.
+14Under review as submission to TMLR
+density estimation methods, for instance in the form of energy-based models (Grathwohl et al.; Elflein et al.,
+2021) or other hybrid architectures (Lee et al., 2018; Mukhoti et al., 2021).
+Applications Some of the discussed models have already found a variety of applications, such as in au-
+tonomous driving (Capellier et al., 2019; Liu et al., 2021; Petek et al., 2021; Wang et al., 2021), medical
+screening (Ghesu et al., 2019; Gu et al., 2021), molecular analysis (Soleimany et al., 2021), open set recog-
+nition (Bao et al., 2021), active learning (Hemmer et al., 2022) and model selection (Radev et al., 2021).
+6 Discussion
+Challenges Despite their advantages, the last chapters have highlighted key weaknesses of Dirichlet net-
+works as well: In order to achieve the right behavior of the distribution and thus guarantee sensible uncer-
+tainty estimates (since ground truth estimates are not available), the surveyed literature proposes a variety
+of loss functions. Bengs et al. (2022) show formally that many of the loss functions used so far are notappro-
+priate and violate basic asymptotic assumptions about epistemic uncertainty. Furthermore, some approaches
+Malinin & Gales (2018; 2019); Nandy et al. (2020); Malinin et al. (2020a) require out-of-distribution data
+points during training. This comes with two problems: Such data is often not available or in the first place,
+or cannot guarantee robustness against otherkinds of unseen OOD data, of which infinite types exist in
+a real-valued feature space.12Indeed, Kopetzki et al. (2021) found OOD detection to deteriorate across a
+family of Dirichlet-based models under adversarial perturbation and OOD data points.
+Comparison to existing approaches As discussed in Section 5, several existing approaches to uncer-
+tainty quantification equally suffer from shortcomings with respect to their reliability. One possible explana-
+tion for this behavior might lie in the insight that neural networks trained in the empirical risk minimization
+framework tend to learn spurious but highly predictive features (Ilyas et al., 2019; Nagarajan et al., 2021).
+This way, inputs stemming from the training distribution can be mapped to similar parts of the latent space
+as data points outside the distribution even though they have (from a human perspective) blatant semantic
+differences, simply because these semantic features were not useful to optimize for the training objective.
+This can result in ID and OOD points having assigned similar feature representations by a network, a phe-
+nomenon has been coined “feature collapse” (Nalisnick et al., 2019; van Amersfoort et al., 2021; Havtorn
+et al., 2021). One strategy to mitigate (but not solve) this issue has been to enforce a constraint on the
+smoothness of the neural network function (Wei et al., 2018; van Amersfoort et al., 2020; 2021; Liu et al.,
+2020), thereby maintaining both a sensitivity to semantic changes in the input and robustness against adver-
+sarial inputs (Yu et al., 2019). Another approach lies in the usage of OOD data as well, sometimes dubbed
+“outlier exposure” (Fort et al., 2021), but displaying the same shortcomings as in the EDL case. A generally
+promising strategy seems to seek functional diversity through ensembling: Juneja et al. (2022) show how
+model instances ending up in different low-loss modes correspond to distinxt generalization strategies on nat-
+ural language data, indicating that combining diverse strategies may lead to better generalization and thus
+potentially also more reliable uncertainty. Attaining different solutions still creates computational overhead,
+despite new methods to reduce it (Garipov et al., 2018; Dusenberry et al., 2020; Benton et al., 2021).
+Bayesian model averaging One of the most fundamental differences between EDL and existing ap-
+proaches is the sacrifice of Bayesian model averaging (Equations (4) and (5)): In principle, combining multi-
+ple parameter estimates in supposed in a lower predictive risk (Fragoso et al., 2018). The Machine Learning
+community has ascribed further desiderata to this approach, such as better generalization and robustness
+to distributional shifts. Recent studies with exact Bayesian Neural Networks however have cast doubts on
+these assumptions (Izmailov et al., 2021a;b). Nevertheless, ensembles, that approximate Equation (4) via
+Monte Carlo estimates, remain state-of-the-art on many uncertainty benchmarks. EDL abandons modelling
+epistemic uncertainty through the learnable parameters, and instead expresses it through the uncertainty in
+prior / posterior parameters. This loses functional diversity which could aid generalization, while sidestep-
+ping computational costs. Future research could therefore explore the combination of both paradigms, as
+proposed by Haussmann et al. (2019); Zhao et al. (2020); Charpentier et al. (2021).
+12The same applies to the artificial OOD data in Chen et al. (2018); Shen et al. (2020); Sensoy et al. (2020).
+15Under review as submission to TMLR
+7 Conclusion
+This survey has given an overview over contemporary approaches for uncertainty estimation using neu-
+ral networks to parameterize conjugate priors or the corresponding posteriors instead of likelihoods, called
+Evidential Deep Learning. We highlighted their appealing theoretical properties allowing for uncertainty
+estimation with minimal computational overhead, rendering them as a viable alternative to existing strate-
+gies. We also emphasized practical problems: In order to nudge models towards the desired behavior in the
+face of unseen or out-of-distribution samples, the design of the model architecture and loss function have to
+be carefully considered. Based on a summary and discussion of experimental findings in Appendix A, the
+entropy regularizer seems to be a sensible choice in prior networks when OOD data is not available. Com-
+bining discriminators with generative models like normalizing flows like in (Charpentier et al., 2020; 2021),
+embedded in a sturdy Bayesian framework, also appears as an exciting direction for practical applications. In
+summary, we believe that recent advances show promising results for Evidential Deep Learning, making it a
+viable option in uncertainty estimation to improve safety and trustworthiness in Machine Learning systems.
+References
+Alexander Amini, Wilko Schwarting, Ava Soleimany, and Daniela Rus. Deep Evidential Regression. In
+Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Pro-
+cessing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020.
+Martin Arjovsky, Soumith Chintala, and Léon Bottou. Wasserstein Generative Adversarial Networks. In
+International conference on machine learning , pp. 214–223. PMLR, 2017.
+Jsang Audun. Subjective Logic: A Formalism for Reasoning under Uncertainty . Springer, 2018.
+WentaoBao, QiYu, andYuKong. EvidentialDeepLearningforOpenSetActionRecognition. In Proceedings
+of the IEEE/CVF International Conference on Computer Vision , pp. 13349–13358, 2021.
+Alexei Bastidas. Tiny Imagenet Image Classification, 2017.
+Viktor Bengs, Eyke Hüllermeier, and Willem Waegeman. On the Difficulty of Epistemic Uncertainty Quan-
+tification in Machine Learning: The Case of Direct Uncertainty Estimation through Loss Minimisation.
+arXiv preprint arXiv:2203.06102 , 2022.
+Gregory W. Benton, Wesley J. Maddox, Sanae Lotfi, and Andrew Gordon Wilson. Loss surface simplexes
+for mode connecting volumes and fast ensembling. In Proceedings of the 38th International Conference on
+Machine Learning, ICML 2021, 18-24 July 2021, Virtual Event , volume 139 of Proceedings of Machine
+Learning Research , pp. 769–779. PMLR, 2021.
+Umang Bhatt, Javier Antorán, Yunfeng Zhang, Q. Vera Liao, Prasanna Sattigeri, Riccardo Fogliato,
+Gabrielle Gauthier Melançon, Ranganath Krishnan, Jason Stanley, Omesh Tickoo, Lama Nachman, Rumi
+Chunara, Madhulika Srikumar, Adrian Weller, and Alice Xiang. Uncertainty as a Form of Transparency:
+Measuring, Communicating, and Using Uncertainty. In AIES ’21: AAAI/ACM Conference on AI, Ethics,
+and Society, Virtual Event, USA, May 19-21, 2021 , pp. 401–413. ACM, 2021.
+Marin Biloš, Bertrand Charpentier, and Stephan Günnemann. Uncertainty on Asynchronous Time Event
+Prediction. In Advances in Neural Information Processing Systems , pp. 12851–12860, 2019.
+Christopher M Bishop. Pattern Recognition. Machine learning , 128(9), 2006.
+Charles Blundell, Julien Cornebise, Koray Kavukcuoglu, and Daan Wierstra. Weight Uncertainty in Neural
+Networks. arXiv preprint arXiv:1505.05424 , 2015.
+Yaroslav Bulatov. NotMNIST Dataset. Google (Books/OCR), Tech. Rep.[Online]. Available:
+http://yaroslavvb. blogspot. it/2011/09/notmnist-dataset. html , 2, 2011.
+16Under review as submission to TMLR
+Edouard Capellier, Franck Davoine, Véronique Cherfaoui, and You Li. Evidential Deep Learning for Ar-
+bitrary LIDAR Object Classification in the Context of Autonomous Driving. In 2019 IEEE Intelligent
+Vehicles Symposium, IV 2019, Paris, France, June 9-12, 2019 , pp. 1304–1311. IEEE, 2019.
+BertrandCharpentier, DanielZügner, and StephanGünnemann. Posterior Network: UncertaintyEstimation
+without OOD Samples via Density-Based Pseudo-Counts. CoRR, abs/2006.09239, 2020.
+Bertrand Charpentier, Oliver Borchert, Daniel Zügner, Simon Geisler, and Stephan Günnemann. Natural
+Posterior Network: Deep Bayesian Predictive Uncertainty for Exponential Family Distributions. arXiv
+preprint arXiv:2105.04471 , 2021.
+Wenhu Chen, Yilin Shen, Hongxia Jin, and William Wang. A Variational Dirichlet Framework for Out-Of-
+Distribution Detection. arXiv preprint arXiv:1811.07308 , 2018.
+Tarin Clanuwat, Mikel Bober-Irizar, Asanobu Kitamoto, Alex Lamb, Kazuaki Yamamoto, and David Ha.
+Deep Learning for Classical Japanese Literature. arXiv preprint arXiv:1812.01718 , 2018.
+AndreaCoraddu,LucaOneto,AessandroGhio, StefanoSavio,DavideAnguita, andMassimoFigari. Machine
+Learning Approaches for Improving Condition-Based Maintenance of Naval Propulsion Plants. Proceedings
+of the Institution of Mechanical Engineers, Part M: Journal of Engineering for the Maritime Environment ,
+230(1):136–153, 2016.
+Peter I Corke. A Robotics Toolbox for MATLAB. IEEE Robotics & Automation Magazine , 3(1):24–32, 1996.
+PauloCortez, AntónioCerdeira, FernandoAlmeida, TelmoMatos, andJoséReis. ModelingWinePreferences
+by Data Mining from Physicochemical Properties. Decision support systems , 47(4):547–553, 2009.
+Alice Coucke, Alaa Saade, Adrien Ball, Théodore Bluche, Alexandre Caulier, David Leroy, Clément
+Doumouro, Thibault Gisselbrecht, Francesco Caltagirone, Thibaut Lavril, et al. Snips Voice Platform:
+An Embedded Spoken Language Understanding System for Private-by-Design Voice Interfaces. arXiv
+preprint arXiv:1805.10190 , 2018.
+Mindy I Davis, Jeremy P Hunt, Sanna Herrgard, Pietro Ciceri, Lisa M Wodicka, Gabriel Pallares, Michael
+Hocker,DanielKTreiber,andPatrickPZarrinkar. ComprehensiveAnalysisofKinaseInhibitorSelectivity.
+Nature biotechnology , 29(11):1046–1051, 2011.
+Erik Daxberger, Agustinus Kristiadi, Alexander Immer, Runa Eschenhagen, Matthias Bauer, and Philipp
+Hennig. Laplace Redux–Effortless Bayesian Deep Learning. arXiv preprint arXiv:2106.14806 , 2021.
+Arthur P Dempster. A Generalization of Bayesian Inference. Journal of the Royal Statistical Society: Series
+B (Methodological) , 30(2):205–232, 1968.
+Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A Large-Scale Hierarchical
+Image Database. In 2009 IEEE conference on computer vision and pattern recognition , pp. 248–255. Ieee,
+2009.
+Armen Der Kiureghian and Ove Ditlevsen. Aleatory or Epistemic? Does it matter? Structural safety , 31
+(2):105–112, 2009.
+Thomas G Dietterich and Alexander Guyer. The Familiarity Hypothesis: Explaining the Behavior of Deep
+Open Set Methods. arXiv preprint arXiv:2203.02486 , 2022.
+Dheeru Dua, Casey Graff, et al. UCI Machine Learning Repository. 2017.
+Michael Dusenberry, Ghassen Jerfel, Yeming Wen, Yi-An Ma, Jasper Snoek, Katherine A. Heller, Balaji
+Lakshminarayanan, and Dustin Tran. Efficient and scalable bayesian neural nets with rank-1 factors. In
+Proceedings of the 37th International Conference on Machine Learning, ICML 2020, 13-18 July 2020,
+Virtual Event , volume 119 of Proceedings of Machine Learning Research , pp. 2782–2792. PMLR, 2020.
+17Under review as submission to TMLR
+Sven Elflein, Bertrand Charpentier, Daniel Zügner, and Stephan Günnemann. On Out-of-distribution De-
+tection with Energy-based Models. arXiv preprint arXiv:2107.08785 , 2021.
+Hadi Fanaee-T and Joao Gama. Event Labeling Combining Ensemble Detectors and Background Knowledge.
+Progress in Artificial Intelligence , 2(2):113–127, 2014.
+Stanislav Fort, Huiyi Hu, and Balaji Lakshminarayanan. Deep Ensembles: A Loss Landscape Perspective.
+arXiv preprint arXiv:1912.02757 , 2019.
+Stanislav Fort, Jie Ren, and Balaji Lakshminarayanan. Exploring the limits of out-of-distribution detection.
+InAdvances in Neural Information Processing Systems 34: Annual Conference on Neural Information
+Processing Systems 2021, NeurIPS 2021, December 6-14, 2021, virtual , pp. 7068–7081, 2021.
+Tiago M Fragoso, Wesley Bertoli, and Francisco Louzada. Bayesian model averaging: A systematic review
+and conceptual classification. International Statistical Review , 86(1):1–28, 2018.
+Yarin Gal and Zoubin Ghahramani. Dropout as a Bayesian Approximation: Representing Model Uncertainty
+in Deep Learning. In International conference on Machine Learning , pp. 1050–1059, 2016.
+Timur Garipov, Pavel Izmailov, Dmitrii Podoprikhin, Dmitry P. Vetrov, and Andrew Gordon Wilson. Loss
+surfaces, mode connectivity, and fast ensembling of dnns. In Advances in Neural Information Processing
+Systems 31: Annual Conference on Neural Information Processing Systems 2018, NeurIPS 2018, December
+3-8, 2018, Montréal, Canada , pp. 8803–8812, 2018.
+Andrew Gelman, John B Carlin, Hal S Stern, and Donald B Rubin. Bayesian Data Analysis . Chapman and
+Hall/CRC, 1995.
+J Gerritsma, R Onnink, and A Versluis. Geometry, Resistance and Stability of the Delft Systematic Yacht
+Hull Series. International shipbuilding progress , 28(328):276–297, 1981.
+Florin C. Ghesu, Bogdan Georgescu, Eli Gibson, Sebastian Gündel, Mannudeep K. Kalra, Ramandeep Singh,
+Subba R. Digumarthy, Sasa Grbic, and Dorin Comaniciu. Quantifying and Leveraging Classification
+Uncertainty for Chest Radiograph Assessment. In Medical Image Computing and Computer Assisted
+Intervention - MICCAI 2019 - 22nd International Conference, Shenzhen, China, October 13-17, 2019,
+Proceedings, Part VI , volume 11769 of Lecture Notes in Computer Science , pp. 676–684. Springer, 2019.
+C Lee Giles, Kurt D Bollacker, and Steve Lawrence. CiteSeer: An Automatic Citation Indexing System. In
+Proceedings of the third ACM conference on Digital libraries , pp. 89–98, 1998.
+Ian J. Goodfellow, Yaroslav Bulatov, Julian Ibarz, Sacha Arnoud, and Vinay D. Shet. Multi-Digit Number
+Recognition from Street View Imagery using Deep Convolutional Neural Networks. In 2nd International
+Conference on Learning Representations, ICLR 2014, Banff, AB, Canada, April 14-16, 2014, Conference
+Track Proceedings , 2014. URL http://arxiv .org/abs/1312 .6082.
+Will Grathwohl, Kuan-Chieh Wang, Jörn-Henrik Jacobsen, David Duvenaud, Mohammad Norouzi, and
+Kevin Swersky. Your Classifier is Secretly an Energy-Based Model and You Should Treat It Like One.
+In8th International Conference on Learning Representations, ICLR 2020, Addis Ababa, Ethiopia, April
+26-30, 2020 .
+Ang Nan Gu, Christina Luong, Mohammad H. Jafari, Nathan Van Woudenberg, Hany Girgis, Purang Abol-
+maesumi, andTeresaTsang. EfficientEchocardiogramViewClassificationwithSampling-FreeUncertainty
+Estimation. In Simplifying Medical Ultrasound - Second International Workshop, ASMUS 2021, Held in
+Conjunction with MICCAI 2021, Strasbourg, France, September 27, 2021, Proceedings , volume 12967 of
+Lecture Notes in Computer Science , pp. 139–148. Springer, 2021.
+Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. On Calibration of Modern Neural Networks.
+InProceedings of the 34th International Conference on Machine Learning, ICML 2017, Sydney, NSW,
+Australia, 6-11 August 2017 , volume 70 of Proceedings of Machine Learning Research , pp. 1321–1330.
+PMLR, 2017.
+18Under review as submission to TMLR
+David Harrison Jr and Daniel L Rubinfeld. Hedonic Housing Prices and the Demand for Clean Air. Journal
+of environmental economics and management , 5(1):81–102, 1978.
+Manuel Haussmann, Sebastian Gerwinn, and Melih Kandemir. Bayesian Evidential Deep Learning with
+PAC Regularization. arXiv preprint arXiv:1906.00816 , 2019.
+Jakob Drachmann Havtorn, Jes Frellsen, Søren Hauberg, and Lars Maaløe. Hierarchical VAEs Know What
+They Don’t Know. In Proceedings of the 38th International Conference on Machine Learning, ICML 2021,
+18-24 July 2021, Virtual Event , volume 139 of Proceedings of Machine Learning Research , pp. 4117–4128.
+PMLR, 2021.
+MatthiasHein, MaksymAndriushchenko, andJulianBitterwolf. WhyReLUNetworksYieldHigh-Confidence
+Predictions Far Away From the Training Data and How to Mitigate the Problem. In IEEE Conference on
+Computer Vision and Pattern Recognition, CVPR 2019, Long Beach, CA, USA, June 16-20, 2019 , pp.
+41–50. Computer Vision Foundation / IEEE, 2019.
+Patrick Hemmer, Niklas Kühl, and Jakob Schöffer. Deal: Deep Evidential Active Learning for Image Clas-
+sification. In Deep Learning Applications, Volume 3 , pp. 171–192. Springer, 2022.
+Charles T Hemphill, John J Godfrey, and George R Doddington. The ATIS Spoken Language Systems Pilot
+Corpus. In Speech and Natural Language: Proceedings of a Workshop Held at Hidden Valley, Pennsylvania,
+June 24-27, 1990 , 1990.
+Dan Hendrycks and Kevin Gimpel. A Baseline for Detecting Misclassified and Out-of-Distribution Examples
+in Neural Networks. In 5th International Conference on Learning Representations, ICLR 2017, Toulon,
+France, April 24-26, 2017, Conference Track Proceedings .
+José Miguel Hernández-Lobato and Ryan Adams. Probabilistic Backpropagation for Scalable Learning of
+Bayesian Neural Networks. In International conference on machine learning , pp. 1861–1869. PMLR, 2015.
+Geoffrey Hinton, Oriol Vinyals, Jeff Dean, et al. Distilling the knowledge in a neural network. arXiv preprint
+arXiv:1503.02531 , 2(7), 2015.
+Weihua Hu, Matthias Fey, Marinka Zitnik, Yuxiao Dong, Hongyu Ren, Bowen Liu, Michele Catasta, and
+Jure Leskovec. Open Graph Benchmark: Datasets for Machine Learning on Graphs. Advances in neural
+information processing systems , 33:22118–22133, 2020.
+Yibo Hu, Yuzhe Ou, Xujiang Zhao, Jin-Hee Cho, and Feng Chen. Multidimensional Uncertainty-Aware
+Evidential Neural Networks. In Thirty-Fifth AAAI Conference on Artificial Intelligence, AAAI 2021,
+Thirty-Third Conference on Innovative Applications of Artificial Intelligence, IAAI 2021, The Eleventh
+Symposium on Educational Advances in Artificial Intelligence, EAAI 2021, Virtual Event, February 2-9,
+2021, pp. 7815–7822. AAAI Press, 2021. URL https://ojs .aaai.org/index.php/AAAI/article/view/
+16954.
+Xinyu Huang, Xinjing Cheng, Qichuan Geng, Binbin Cao, Dingfu Zhou, Peng Wang, Yuanqing Lin, and
+Ruigang Yang. The Apolloscape Dataset for Autonomous Driving. In Proceedings of the IEEE conference
+on computer vision and pattern recognition workshops , pp. 954–960, 2018.
+Eyke Hüllermeier and Willem Waegeman. Aleatoric and Epistemic Uncertainty in Machine Learning: An
+Introduction to Concepts and Methods. Mach. Learn. , 110(3):457–506, 2021.
+Andrew Ilyas, Shibani Santurkar, Dimitris Tsipras, Logan Engstrom, Brandon Tran, and Aleksander Madry.
+Adversarial Examples Are Not Bugs, They Are Features. In Advances in Neural Information Processing
+Systems 32: Annual Conference on Neural Information Processing Systems 2019, NeurIPS 2019, December
+8-14, 2019, Vancouver, BC, Canada , pp. 125–136, 2019.
+Pavel Izmailov, Patrick Nicholson, Sanae Lotfi, and Andrew Gordon Wilson. Dangers of Bayesian Model
+Averaging under Covariate Shift. arXiv preprint arXiv:2106.11905 , 2021a.
+19Under review as submission to TMLR
+Pavel Izmailov, Sharad Vikram, Matthew D. Hoffman, and Andrew Gordon Wilson. What Are Bayesian
+Neural Network Posteriors Really Like? In Proceedings of the 38th International Conference on Machine
+Learning, ICML 2021, 18-24 July 2021, Virtual Event , volume 139 of Proceedings of Machine Learning
+Research , pp. 4629–4640. PMLR, 2021b.
+Moksh Jain, Salem Lahlou, Hadi Nekoei, Victor Butoi, Paul Bertin, Jarrid Rector-Brooks, Maksym
+Korablyov, and Yoshua Bengio. Deup: Direct epistemic uncertainty prediction. arXiv preprint
+arXiv:2102.08501 , 2021.
+Harold Jeffreys. The Theory of Probability . OUP Oxford, 1998.
+Robin Jia, Larry Heck, Dilek Hakkani-Tür, and Georgi Nikolov. Learning Concepts through Conversations
+in Spoken Dialogue Systems. In 2017 IEEE International Conference on Acoustics, Speech and Signal
+Processing (ICASSP) , pp. 5725–5729. IEEE, 2017.
+Taejong Joo, Uijung Chung, and Min-Gwan Seo. Being Bayesian about Categorical Probability. CoRR,
+abs/2002.07965, 2020.
+Michael I Jordan, Zoubin Ghahramani, Tommi S Jaakkola, and Lawrence K Saul. An Introduction to
+Variational Methods for Graphical Models. Machine learning , 37(2):183–233, 1999.
+Jeevesh Juneja, Rachit Bansal, Kyunghyun Cho, João Sedoc, and Naomi Saphra. Linear connectivity reveals
+generalization strategies. arXiv preprint arXiv:2205.12411 , 2022.
+Sunghwan Kim, Jie Chen, Tiejun Cheng, Asta Gindulyte, Jia He, Siqian He, Qingliang Li, Benjamin A
+Shoemaker, Paul A Thiessen, Bo Yu, et al. PubChem 2019 Update: Improved Access to Chemical Data.
+Nucleic acids research , 47(D1):D1102–D1109, 2019.
+Diederik P. Kingma and Max Welling. Auto-Encoding Variational Bayes. In 2nd International Confer-
+ence on Learning Representations, ICLR 2014, Banff, AB, Canada, April 14-16, 2014, Conference Track
+Proceedings , 2014.
+Johannes Klicpera, Aleksandar Bojchevski, and Stephan Günnemann. Predict then propagate: Graph neural
+networks meet personalized pagerank. In 7th International Conference on Learning Representations, ICLR
+2019, New Orleans, LA, USA, May 6-9, 2019 , 2019.
+Anna-Kathrin Kopetzki, Bertrand Charpentier, Daniel Zügner, Sandhya Giri, and Stephan Günnemann.
+Evaluating Robustness of Predictive Uncertainty Estimation: Are Dirichlet-based Models Reliable? In
+Proceedings of the 38th International Conference on Machine Learning, ICML 2021, 18-24 July 2021,
+Virtual Event , volume 139 of Proceedings of Machine Learning Research , pp. 5707–5718. PMLR, 2021.
+Agustinus Kristiadi, Matthias Hein, and Philipp Hennig. Being Bayesian, Even Just a Bit, Fixes Overcon-
+fidence in ReLU Networks. In Proceedings of the 37th International Conference on Machine Learning,
+ICML 2020, 13-18 July 2020, Virtual Event , volume 119 of Proceedings of Machine Learning Research ,
+pp. 5436–5446. PMLR, 2020.
+Alex Krizhevsky, Geoffrey Hinton, et al. Learning Multiple Layers of Features from Tiny Images. 2009.
+Meelis Kull, Miquel Perello Nieto, Markus Kängsepp, Telmo Silva Filho, Hao Song, and Peter Flach. Beyond
+Temperature Scaling: Obtaining Well-Calibrated Multi-Class Probabilities with Dirichlet Calibration.
+Advances in neural information processing systems , 32, 2019.
+Morton Kupperman. Probabilities of Hypotheses and Information-Statistics in Sampling from Exponential-
+Class Populations. Selected Mathematical Papers , 29(2):57, 1964.
+Alexey Kurakin, Ian J. Goodfellow, and Samy Bengio. Adversarial Examples in the Physical World. In 5th
+International Conference on Learning Representations, ICLR 2017, Toulon, France, April 24-26, 2017,
+Workshop Track Proceedings .
+20Under review as submission to TMLR
+BrendenMLake, RuslanSalakhutdinov, andJoshuaBTenenbaum. Human-LevelConceptLearningThrough
+Probabilistic Program Induction. Science, 350(6266):1332–1338, 2015.
+Balaji Lakshminarayanan, Alexander Pritzel, and Charles Blundell. Simple and Scalable Predictive Un-
+certainty Estimation using Deep Ensembles. In Advances in neural information processing systems , pp.
+6402–6413, 2017.
+Yann LeCun. The MNIST Database of Handwritten Digits. http://yann. lecun. com/exdb/mnist/ , 1998.
+Yann LeCun, Léon Bottou, Yoshua Bengio, and Patrick Haffner. Gradient-Based Learning Applied to
+Document Recognition. Proceedings of the IEEE , 86(11):2278–2324, 1998.
+Kimin Lee, Kibok Lee, Honglak Lee, and Jinwoo Shin. A Simple Unified Framework for Detecting Out-of-
+Distribution Samples and Adversarial Attacks. In Advances in Neural Information Processing Systems 31:
+Annual Conference on Neural Information Processing Systems 2018, NeurIPS 2018, December 3-8, 2018,
+Montréal, Canada , pp. 7167–7177, 2018.
+Shiyu Liang, Yixuan Li, and R. Srikant. Enhancing The Reliability of Out-of-distribution Image Detection in
+Neural Networks. In 6th International Conference on Learning Representations, ICLR 2018, Vancouver,
+BC, Canada, April 30 - May 3, 2018, Conference Track Proceedings , 2018.
+Jiayu Lin. On the Dirichlet Distribution. Mater’s Report , 2016.
+Jeremiah Z. Liu, Zi Lin, Shreyas Padhy, Dustin Tran, Tania Bedrax-Weiss, and Balaji Lakshminarayanan.
+Simple and Principled Uncertainty Estimation with Deterministic Deep Learning via Distance Awareness.
+InAdvances in Neural Information Processing Systems 33: Annual Conference on Neural Information
+Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020.
+Tiqing Liu, Yuhmei Lin, Xin Wen, Robert N Jorissen, and Michael K Gilson. BindingDB: A Web-Accessible
+Database of Experimentally Determined Protein–Ligand Binding Affinities. Nucleic acids research , 35
+(suppl_1):D198–D201, 2007.
+Zhijian Liu, Alexander Amini, Sibo Zhu, Sertac Karaman, Song Han, and Daniela L. Rus. Efficient and
+Robust LiDAR-Based End-to-End Navigation. In IEEE International Conference on Robotics and Au-
+tomation, ICRA 2021, Xi’an, China, May 30 - June 5, 2021 , pp. 13247–13254. IEEE, 2021.
+Ziwei Liu, Ping Luo, Xiaogang Wang, and Xiaoou Tang. Deep Learning Face Attributes in the Wild. In
+Proceedings of the IEEE international conference on computer vision , pp. 3730–3738, 2015.
+Andrey Malinin and Mark J. F. Gales. Predictive Uncertainty Estimation via Prior Networks. In Advances in
+Neural Information Processing Systems 31: Annual Conference on Neural Information Processing Systems
+2018, NeurIPS 2018, 3-8 December 2018, Montréal, Canada , pp. 7047–7058, 2018.
+Andrey Malinin and Mark J. F. Gales. Reverse KL-Divergence Training of Prior Networks: Improved
+Uncertainty and Adversarial Robustness. In Advances in Neural Information Processing Systems 32:
+Annual Conference on Neural Information Processing Systems 2019, NeurIPS 2019, 8-14 December 2019,
+Vancouver, BC, Canada , pp. 14520–14531, 2019.
+Andrey Malinin, Sergey Chervontsev, Ivan Provilkov, and Mark Gales. Regression Prior Networks. arXiv
+preprint arXiv:2006.11590 , 2020a.
+Andrey Malinin, Bruno Mlodozeniec, and Mark J. F. Gales. Ensemble Distribution Distillation. In 8th
+International Conference on Learning Representations, ICLR 2020, Addis Ababa, Ethiopia, April 26-30,
+2020, 2020b.
+Lei Mao. Introduction to Exponential Family, 2019. URL https://zhiyzuo .github.io/Exponential-
+Family-Distributions/ . Accessed April 2022.
+21Under review as submission to TMLR
+Andrés R. Masegosa. Learning under Model Misspecification: Applications to Variational and Ensemble
+methods. In Advances in Neural Information Processing Systems 33: Annual Conference on Neural In-
+formation Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020.
+Julian McAuley, Christopher Targett, Qinfeng Shi, and Anton Van Den Hengel. Image-Based Recommen-
+dations on Styles and Substitutes. In Proceedings of the 38th international ACM SIGIR conference on
+research and development in information retrieval , pp. 43–52, 2015.
+Andrew Kachites McCallum, Kamal Nigam, Jason Rennie, and Kristie Seymore. Automating the Construc-
+tion of Internet Portals with Machine Learning. Information Retrieval , 3(2):127–163, 2000.
+Nis Meinert and Alexander Lavin. Multivariate Deep Evidential Regression. arXiv preprint
+arXiv:2104.06135 , 2021.
+Moritz Menze and Andreas Geiger. Object Scene Flow for Autonomous Vehicles. In Proceedings of the IEEE
+conference on computer vision and pattern recognition , pp. 3061–3070, 2015.
+Jeffrey W. Miller. (ML 7.7.A2) Expectation of a Dirichlet Random Variable, 2011. URL https:
+//www.youtube.com/watch?v=emnfq4txDuI .
+Jose G Moreno-Torres, Troy Raeder, RocíO Alaiz-RodríGuez, Nitesh V Chawla, and Francisco Herrera. A
+Unifying View on Dataset Shift in Classification. Pattern recognition , 45(1):521–530, 2012.
+Jishnu Mukhoti, Andreas Kirsch, Joost van Amersfoort, Philip HS Torr, and Yarin Gal. Deterministic
+Neural Networks With Appropriate Inductive Biases Capture Epistemic and Aleatoric Uncertainty. arXiv
+preprint arXiv:2102.11582 , 2021.
+Kevin P Murphy. Conjugate Bayesian Analysis of the Gaussian Distribution. def, 1(2undefined):16, 2007.
+Vaishnavh Nagarajan, Anders Andreassen, and Behnam Neyshabur. Understanding the Failure Modes of
+Out-Of-Distribution Generalization. In 9th International Conference on Learning Representations, ICLR
+2021, Virtual Event, Austria, May 3-7, 2021 , 2021.
+Eric T. Nalisnick, Akihiro Matsukawa, Yee Whye Teh, Dilan Görür, and Balaji Lakshminarayanan. Do
+Deep Generative Models Know What They Don’t Know? In 7th International Conference on Learning
+Representations, ICLR 2019, New Orleans, LA, USA, May 6-9, 2019 , 2019.
+Galileo Namata, Ben London, Lise Getoor, Bert Huang, and UMD EDU. Query-Driven Active Surveying for
+Collective Classification. In 10th International Workshop on Mining and Learning with Graphs , volume 8,
+pp. 1, 2012.
+Jay Nandy, Wynne Hsu, and Mong Li Lee. Towards Maximizing the Representation Gap between In-Domain
+& Out-of-Distribution Examples. Advances in Neural Information Processing Systems , 33, 2020.
+Dongpin Oh and Bonggun Shin. Improving Evidential Deep Learning via Multi-Task Learning. arXiv
+preprint arXiv:2112.09368 , 2021.
+Yaniv Ovadia, Emily Fertig, Jie Ren, Zachary Nado, David Sculley, Sebastian Nowozin, Joshua Dillon, Balaji
+Lakshminarayanan, and Jasper Snoek. Can You Trust Your Model’s Uncertainty? Evaluating Predictive
+UncertaintyunderDatasetShift. In Advances in Neural Information Processing Systems , pp.13991–14002,
+2019.
+Fabian Paschke, Christian Bayer, Martyna Bator, Uwe Mönks, Alexander Dicks, Olaf Enge-Rosenblatt, and
+Volker Lohweg. Sensorlose Zustandsüberwachung an Synchronmotoren. In Proc, pp. 211, 2013.
+Tim Pearce, Alexandra Brintrup, and Jun Zhu. Understanding Softmax Confidence and Uncertainty. arXiv
+preprint arXiv:2106.04972 , 2021.
+Kürsat Petek, Kshitij Sirohi, Daniel Büscher, and Wolfram Burgard. Robust Monocular Localization in
+Sparse HD Maps Leveraging Multi-Task Uncertainty Estimation. arXiv preprint arXiv:2110.10563 , 2021.
+22Under review as submission to TMLR
+Stefan T Radev, Marco D’Alessandro, Ulf K Mertens, Andreas Voss, Ullrich Köthe, and Paul-Christian
+Bürkner. Amortized Bayesian Model Comparison with Evidential Deep Learning. IEEE Transactions on
+Neural Networks and Learning Systems , 2021.
+Danilo Jimenez Rezende and Shakir Mohamed. Variational Inference with Normalizing Flows. In Proceedings
+of the 32nd International Conference on Machine Learning, ICML 2015, Lille, France, 6-11 July 2015 ,
+volume 37 of JMLR Workshop and Conference Proceedings , pp. 1530–1538. JMLR.org, 2015.
+Murat Sensoy, Lance Kaplan, and Melih Kandemir. Evidential Deep Learning to Quantify Classification
+Uncertainty. In Advances in Neural Information Processing Systems , pp. 3179–3189, 2018.
+Murat Sensoy, Lance M. Kaplan, Federico Cerutti, and Maryam Saleki. Uncertainty-Aware Deep Classifiers
+Using Generative Models. In The Thirty-Fourth AAAI Conference on Artificial Intelligence, AAAI 2020,
+The Thirty-Second Innovative Applications of Artificial Intelligence Conference, IAAI 2020, The Tenth
+AAAI Symposium on Educational Advances in Artificial Intelligence, EAAI 2020, New York, NY, USA,
+February 7-12, 2020 , pp. 5620–5627. AAAI Press, 2020.
+Oleksandr Shchur, Maximilian Mumme, Aleksandar Bojchevski, and Stephan Günnemann. Pitfalls of Graph
+Neural Network Evaluation. arXiv preprint arXiv:1811.05868 , 2018.
+Yilin Shen, Wenhu Chen, and Hongxia Jin. Modeling Token-level Uncertainty to Learn Unknown Concepts
+in SLU via Calibrated Dirichlet Prior RNN. CoRR, abs/2010.08101, 2020.
+Nathan Silberman, Derek Hoiem, Pushmeet Kohli, and Rob Fergus. Indoor Segmentation and Support
+Inference from RGBD Images. In European conference on computer vision , pp. 746–760. Springer, 2012.
+Lewis Smith and Yarin Gal. Understanding Measures of Uncertainty for Adversarial Example Detection. In
+Proceedings of the Thirty-Fourth Conference on Uncertainty in Artificial Intelligence, UAI 2018, Monterey,
+California, USA, August 6-10, 2018 , pp. 560–569, 2018.
+Ava P Soleimany, Alexander Amini, Samuel Goldman, Daniela Rus, Sangeeta N Bhatia, and Connor W
+Coley. Evidential Deep Learning for Guided Molecular Property Prediction and Discovery. ACS central
+science, 7(8):1356–1367, 2021.
+Maximilian Stadler, Bertrand Charpentier, Simon Geisler, Daniel Zügner, and Stephan Günnemann. Graph
+Posterior Network: Bayesian Predictive Uncertainty for Node Classification. Advances in Neural Infor-
+mation Processing Systems , 34, 2021.
+Jing Tang, Agnieszka Szwajda, Sushil Shakyawar, Tao Xu, Petteri Hintsanen, Krister Wennerberg, and Tero
+Aittokallio. Making Sense of Large-Scale Kinase Inhibitor Bioactivity Data Sets: A Comparative and
+Integrative Analysis. Journal of Chemical Information and Modeling , 54(3):735–743, 2014.
+Athanasios Tsanas and Angeliki Xifara. Accurate Quantitative Estimation of Energy Performance of Resi-
+dential Buildings using Statistical Machine Learning Tools. Energy and buildings , 49:560–567, 2012.
+Theodoros Tsiligkaridis. Information Robust Dirichlet Networks for Predictive Uncertainty Estimation.
+arXiv preprint arXiv:1910.04819 , 2019.
+Dennis Ulmer and Giovanni Cinà. Know Your Limits: Uncertainty Estimation with ReLU Classifiers Fails
+at Reliable OOD Detection. In Uncertainty in Artificial Intelligence , pp. 1766–1776. PMLR, 2021.
+Dennis Ulmer, Lotta Meijerink, and Giovanni Cinà. Trust Issues: Uncertainty Estimation Does not Enable
+Reliable OOD Detection on Medical Tabular Data. In Machine Learning for Health , pp. 341–354. PMLR,
+2020.
+Joost van Amersfoort, Lewis Smith, Yee Whye Teh, and Yarin Gal. Uncertainty Estimation Using a Single
+Deep Deterministic Neural Network. In Proceedings of the 37th International Conference on Machine
+Learning, ICML 2020, 13-18 July 2020, Virtual Event , volume 119 of Proceedings of Machine Learning
+Research , pp. 9690–9700. PMLR, 2020.
+23Under review as submission to TMLR
+Joost van Amersfoort, Lewis Smith, Andrew Jesson, Oscar Key, and Yarin Gal. On Feature Collapse and
+Deep Kernel Learning for Single Forward Pass Uncertainty. arXiv preprint arXiv:2102.11409 , 2021.
+Tim van Erven and Peter Harremoës. Rényi Divergence and Kullback-Leibler Divergence. IEEE Trans. Inf.
+Theory, 60(7):3797–3820, 2014.
+Jordy Van Landeghem, Matthew Blaschko, Bertrand Anckaert, and Marie-Francine Moens. Benchmarking
+Scalable Predictive Uncertainty in Text Classification. Ieee Access , 10:43703–43737, 2022.
+Chen Wang, Xiang Wang, Jiawei Zhang, Liang Zhang, Xiao Bai, Xin Ning, Jun Zhou, and Edwin Hancock.
+Uncertainty Estimation for Stereo Matching Based on Evidential Deep Learning. Pattern Recognition , pp.
+108498, 2021.
+Xiang Wei, Boqing Gong, Zixia Liu, Wei Lu, and Liqiang Wang. Improving the Improved Training of
+Wasserstein GANs: A Consistency Term and Its Dual Effect. In 6th International Conference on Learn-
+ing Representations, ICLR 2018, Vancouver, BC, Canada, April 30 - May 3, 2018, Conference Track
+Proceedings , 2018.
+Florian Wenzel, Kevin Roth, Bastiaan S Veeling, Jakub Światkowski, Linh Tran, Stephan Mandt, Jasper
+Snoek, Tim Salimans, Rodolphe Jenatton, and Sebastian Nowozin. How Good is the Bayes Posterior in
+Deep Neural Networks Really? arXiv preprint arXiv:2002.02405 , 2020.
+Andrew Gordon Wilson and Pavel Izmailov. Bayesian Deep Learning and a Probabilistic Perspective of
+Generalization. In Advances in Neural Information Processing Systems 33: Annual Conference on Neural
+Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020.
+John Michael Winn. Variational Message Passing and Its Applications. 2004.
+Jae Oh Woo. Analytic Mutual Information in Bayesian Neural Networks. arXiv preprint arXiv:2201.09815 ,
+2022.
+Han Xiao, Kashif Rasul, and Roland Vollgraf. Fashion-MNIST: A Novel Image Dataset for Benchmarking
+Machine Learning Algorithms. arXiv preprint arXiv:1708.07747 , 2017.
+Jianxiong Xiao, James Hays, Krista A Ehinger, Aude Oliva, and Antonio Torralba. Sun Database: Large-
+scale Scene Recognition from Abbey to Zoo. In 2010 IEEE computer society conference on computer vision
+and pattern recognition , pp. 3485–3492. IEEE, 2010.
+Ronald R Yager and Liping Liu. Classic Works of the Dempster-Shafer Theory of Belief Functions , volume
+219. Springer, 2008.
+I-C Yeh. Modeling of Strength of High-Performance Concrete using Artificial Neural Networks. Cement and
+Concrete research , 28(12):1797–1808, 1998.
+Fisher Yu, Ari Seff, Yinda Zhang, Shuran Song, Thomas Funkhouser, and Jianxiong Xiao. LSUN: Con-
+struction of a Large-Scale Image Dataset using Deep Learning with Humans in the Loop. arXiv preprint
+arXiv:1506.03365 , 2015.
+Fuxun Yu, Zhuwei Qin, Chenchen Liu, Liang Zhao, Yanzhi Wang, and Xiang Chen. Interpreting and Eval-
+uating Neural Network Robustness. In Proceedings of the Twenty-Eighth International Joint Conference
+on Artificial Intelligence, IJCAI 2019, Macao, China, August 10-16, 2019 , pp. 4199–4205. ijcai.org, 2019.
+XujiangZhao,YuzheOu,LanceKaplan,FengChen,andJin-HeeCho. QuantifyingClassificationUncertainty
+Using Regularized Evidential Neural Networks. arXiv preprint arXiv:1910.06864 , 2019.
+Xujiang Zhao, Feng Chen, Shu Hu, and Jin-Hee Cho. Uncertainty Aware Semi-Supervised Learning on
+Graph Data. In Advances in Neural Information Processing Systems 33: Annual Conference on Neural
+Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020.
+24Under review as submission to TMLR
+A Datasets & Evaluation Techniques Appendix
+Table 4: Overview over uncertainty evaluation techniques and datasets.(∗)indicates that a dataset was
+used as an OOD dataset for evaluation purposes, while(⋄)signifies that it was used as an in-distribution or
+out-of-distribution dataset.(†)means that a dataset was modified to create ID and OOD splits (for instance
+by removing some classes for evaluation or corrupting samples with noise).
+Data Modality
+Method Uncertainty Evaluation Images Tabular Other
+Prior network
+(Malinin & Gales, 2018)OOD Detection,
+Misclassification DetectionMNIST, CIFAR-10,
+Omniglot(∗), SVHN(∗),
+LSUN(∗), TIM(∗)✗ Clusters (Synthetic)
+Prior networks
+(Malinin & Gales, 2019)OOD Detection,
+Adversarial Attack DetectionMNIST, CIFAR-10/100,
+SVHN(∗), LSUN(∗), TIM(∗) ✗ Clusters (Synthetic)
+Information Robust Dirichlet Networks
+(Tsiligkaridis, 2019)OOD Detection,
+Adversarial Attack DetectionMNIST, FashionMNIST(∗)
+notMNIST(∗), Omniglot(∗)
+CIFAR-10, TIM(∗), SVHN(∗)✗ ✗
+Dirichlet via Function Decomposition
+(Biloš et al., 2019)OOD Detection ✗Erdős-Rényi Graph
+(Synthetic), Stack Exchange,
+Smart Home, Car Indicators✗
+Prior network with PAC Regularization
+(Haussmann et al., 2019)OOD DetectionMNIST, FashionMNIST(∗)
+CIFAR-10(†) ✗ ✗
+Ensemble Distribution Distillation
+(Malinin et al., 2020b)OOD Detection,
+Misclassification Detection,
+CalibrationCIFAR-10, CIFAR-100(⋄)
+TIM(⋄), LSUN(∗) ✗ Spirals (Synthetic)
+Prior networks with representation gap
+(Nandy et al., 2020)OOD DetectionCIFAR-10(⋄), CIFAR-100(⋄)
+TIM, ImageNet(∗) ✗ Clusters (Synthetic)
+Prior RNN (Shen et al., 2020) New Concept Extraction ✗ ✗Concept Learning(⋄), Snips(⋄),
+ATIS(⋄)(Language)
+Graph-based Kernel Dirichlet distribution
+estimation (GKDE) (Zhao et al., 2020)OOD Detection
+Misclassification Detection✗ ✗Coauthors Physics(⋄),
+Amazon Computer(⋄)
+Amazon Photo(⋄)(Graph)
+Evidential Deep Learning
+(Sensoy et al., 2018)OOD Detection,
+Adversarial Attack DetectionMNIST, notMNIST(∗),
+CIFAR-10(†) ✗ ✗
+Regularized ENN
+Zhao et al. (2019)OOD Detection CIFAR-10(†)✗ Clusters (Synthetic)
+WGAN–ENN
+(Hu et al., 2021)OOD Detection,
+Adversarial Attack DetectionMNIST, notMNIST(∗),
+CIFAR-10(†) ✗ Clusters (Synthetic)
+Variational Dirichlet
+(Chen et al., 2018)OOD Detection,
+Adversarial Attack DetectionMNIST, CIFAR-10/100,
+iSUN(∗), LSUN(∗),
+SVHN(∗), TIM(∗)✗ ✗
+Belief Matching (Joo et al., 2020) OOD Detection, Calibration CIFAR-10/100, SVHN(∗)✗ ✗
+Posterior Networks
+(Charpentier et al., 2020)OOD Detection,
+Misclassification Detection,
+CalibrationMNIST, FashionMNIST(∗),
+K-MNIST(∗), CIFAR-10,
+SVHN(∗)Segment(†),
+Sensorless Drive(†) Clusters (Synthetic)
+Graph Posterior Networks
+(Stadler et al., 2021)OOD Detection,
+Misclassification Detection,
+Calibration✗ ✗Amazon Computer(⋄), Amazon Photo(⋄)
+CoraML(⋄), CiteSeerCoraML(⋄),
+PubMed(⋄), Coauthors Physics(⋄),
+CoauthorsCS(⋄), OBGN Arxiv(⋄)(Graph)
+Deep Evidential Regression
+(Amini et al., 2020)OOD Detection,
+Misclassification Detection,
+Adversarial Attack Detection
+CalibrationNYU Depth v2
+ApolloScape∗
+(Depth Estimation)UCI Regression
+BenchmarkUnivariate Regression (Synthetic)
+Deep Evidential Regression
+with Multi-task Learning
+(Oh & Shin, 2021)OOD Detection,
+Calibration✗Davis, Kiba(†),
+BindingDB, PubChem(∗)
+(Drug discovery),
+UCI Regression
+BenchmarkUnivariate Regression (Synthetic)
+Multivariate Deep Evidential
+Regression Meinert & Lavin (2021)Qualitative Evaluation ✗ ✗ Multivariate Regression (Synthetic)
+Regression Prior Network
+(Malinin et al., 2020a)OOD DetectionNYU Depth v2⋄,
+KITTI⋄
+(Depth Estimation)UCI Regression
+BenchmarkUnivariate Regression (Synthetic)
+Natural Posterior Network
+(Charpentier et al., 2021)OOD Detection, CalibrationNYU Depth v2,
+KITTI∗, LSUN(∗)
+(Depth Estimation),
+MNIST, FashionMNIST(∗),
+K-MNIST(∗), CIFAR-10(†),
+SVHN(∗), CelebA(∗)UCI Regression
+Benchmark(†),
+Sensorless Drive(†),
+Bike Sharing(†)Clusters (Synthetic),
+Univariate Regression (Synthetic))
+25Under review as submission to TMLR
+This section contains a discussion of the used datasets, methods to evaluate the quality of uncertainty
+evaluation, as well as a direct of available models based on the reported results to determine the most useful
+choices for practitioners. An overview over the differences between the surveyed works is given in Table 4.
+Datasets Most models are applied to image classification problems, where popular choices involve the
+MNIST dataset (LeCun, 1998), using as OOD datasets Fashion-MNIST (Xiao et al., 2017), notMNIST
+(Bulatov, 2011) containing English letters, K-MNIST (Clanuwat et al., 2018) with ancient Japanese
+Kuzushiji characters, and the Omniglot dataset (Lake et al., 2015), featuring handwritten characters from
+more than 50 alphabets. Other choices involve different versions of the CIFAR-10 object recognition dataset
+(LeCun et al., 1998; Krizhevsky et al., 2009) for training purposes and SVHN (Goodfellow et al., 2014),
+iSUN (Xiao et al., 2010), LSUN (Yu et al., 2015), CelebA (Liu et al., 2015), ImageNet (Deng et al., 2009)
+and TinyImagenet (Bastidas, 2017) for OOD samples. Regression image datasets include for instance the
+NYU Depth Estimation v2 dataset (Silberman et al., 2012), using ApolloScape (Huang et al., 2018) or
+KITTI (Menze & Geiger, 2015) as an OOD dataset. Many authors also illustrate model uncertainty on
+synthetic data, for instance by simulating clusters of data points using Gaussians (Malinin & Gales, 2018;
+2019; Nandy et al., 2020; Zhao et al., 2019; Hu et al., 2020; Charpentier et al., 2020; 2021), spiral data
+(Malinin et al., 2020b) or polynomials for regression (Amini et al., 2020; Oh & Shin, 2021; Meinert &
+Lavin, 2021; Malinin et al., 2020a; Charpentier et al., 2021). Tabular datasets include the Segment dataset,
+predicting image segments based on pixel features (Dua et al., 2017), and the sensorless drive dataset
+(Dua et al., 2017; Paschke et al., 2013), describing the maintenance state of electric current drives as well
+as popular regression datasets included in the UCI regression benchmark used by Hernández-Lobato &
+Adams (2015); Gal & Ghahramani (2016): Boston house prices (Harrison Jr & Rubinfeld, 1978), concrete
+compression strength (Yeh, 1998), energy efficiency of buildings (Tsanas & Xifara, 2012), forward kinematics
+of an eight link robot arm (Corke, 1996), maintenance of naval propulsion systems (Coraddu et al., 2016),
+properties of protein tertiary stuctures, wine quality (Cortez et al., 2009), and yacht hydrodynamics
+(Gerritsma et al., 1981). Furthermore, Oh & Shin (2021) use a number of drug discovery datasets, such as
+Davis (Davis et al., 2011), Kiba (Tang et al., 2014), BindingDB (Liu et al., 2007) and PubChem (Kim et al.,
+2019). Biloš et al. (2019) are the only authors working on asynchronous time even prediction, and supply
+their own data in the form of processed stack exchange postings, smart home data, and car indicators.
+Shen et al. (2020) provide the sole method on language data, and use three different concept learning
+datasets, i.e. Concept Learning (Jia et al., 2017), Snips (Coucke et al., 2018) and ATIS (Hemphill et al.,
+1990), which contains new OOD concepts to be learned by design. For graph neural networks, Zhao et al.
+(2020) and Stadler et al. (2021) select data from the co-purchase datasets Amazon Computer, Amazon
+Photos (McAuley et al., 2015) and the CoraML (McCallum et al., 2000), CiteSeer (Giles et al., 1998)
+and PubMed (Namata et al., 2012), Coauthors Physics (Shchur et al., 2018), CoauthorCS (Namata et al.,
+2012) and OGBN Arxiv (Hu et al., 2020) citation datasets. Lastly, Charpentier et al. (2021) use a sin-
+gle count prediction dataset concerned with predicting the number of bike rentals (Fanaee-T & Gama, 2014).
+Uncertainty Evaluation Methods There usually are no gold labels for uncertainty estimates, which is
+why the efficacy of proposed solutions has to be evaluated in a different way. One such way used by almost
+all the surveyed works is using uncertainty estimates in a proxy OOD detection task: Since the model is
+underspecified on unseen samples from another distribution, it should be more uncertain. By labelling
+OOD samples as the positive and ID inputs as the negative class, we can measure the performance of
+uncertainty estimates using the area under the receiver-operator characteristic (AUROC) or the area under
+the precision-recall curve (AUPR). We can thereby characterize the usage of data from another dataset
+as a form of covariate shift, while using left-out classes for testing can be seen as a kind of concept shift
+(Moreno-Torres et al., 2012). Instead of using OOD data, another approach is to use adversarial examples
+(Malinin & Gales, 2019; Tsiligkaridis, 2019; Sensoy et al., 2018; Hu et al., 2021; Chen et al., 2018; Amini
+et al., 2020), checking if they can be identified through uncertainty. In the case of Shen et al. (2020), OOD
+detection or new concept extraction is the actual and not a proxy task, and thus can be evaluated using
+classical metrics such as the F1score. Another way is misclassification detection: In general, we would desire
+the model to be more uncertain about inputs it incurs a higher loss on, i.e., what it is more wrong about.
+For this purpose, some works (Malinin & Gales, 2018; Zhao et al., 2020; Charpentier et al., 2020) measure
+26Under review as submission to TMLR
+whether let missclassified inputs be the positive class in another binary proxy classification test, and again
+measure AUROC and AUPR. Alternatively, Malinin et al. (2020b); Stadler et al. (2021); Amini et al. (2020)
+show or measure the area under the prediction / rejection curve, graphing how task performance varies as
+predictions on increasingly uncertain inputs is suspended. Lastly, some authors look at a model’s calibration
+(Guo et al., 2017): While this does not allow to judge the quality of uncertainty estimates themselves,
+quantities like the expected calibration error quantify to what extent the output distribution of a clas-
+sifiercorrespondstothetruelabeldistribution, andthuswhetheraleatoricuncertaintyisaccuratelyreflected.
+What is state-of-the-art? As apparent from Table 4, evaluation methods and datasets can vary tremen-
+dously between different research works. This can make it hard to accurately compare different approaches
+in a fair manner. Nevertheless, we try to draw some conclusion about the state-of-art in this research
+direction to the best extent possible: For image classification , the posterior (Charpentier et al., 2020) and
+natural posterior network (Charpentier et al., 2021) provide the best results on the tested benchmarks, both
+in terms of task performance and uncertainty quality. When the training an extra normalizing flow creates
+too much computational overhead, prior networks (Malinin & Gales, 2018) with the PAC-based regularizer
+(Haussmann et al., 2019; see Table 5 for final form) or a simple entropy regularizer (Appendix B.2) can be
+used. In the case of regression problems, the natural posterior network (Stadler et al., 2021) performs
+better or on par with the evidential regression by Amini et al. (2020) or an ensemble Lakshminarayanan
+et al. (2017) or MC Dropout (Gal & Ghahramani, 2016). For graph neural networks , the graph posterior
+network (Stadler et al., 2021) and a ensemble provide similar performance, but with the former displaying
+better uncertainty results. Again, this model requires training a NF, so a simpler fallback is provided by
+evidential regression (Amini et al., 2020) with the improvement by Oh & Shin (2021). For NLPandcount
+prediction , the works of Shen et al. (2020) and Charpentier et al. (2021) are the only available instances
+from this model family, respectively. In the latter case, ensembles and the evidential regression frame-
+work (Amini et al., 2020) produce a lower root mean-squared error, but worse uncertainty estimates on OOD.
+Caveats Stadler et al. (2021) point out that much of the ability of posterior networks stems from the
+addition of a NF, which have been shown to also sometimes behave unreliably on OOD data (Nalisnick
+et al., 2019). Although the NFs in posterior networks operate on the latent and not the feature space, they
+are also restricted to operate on features that the underlying network has learned to recognize. Recent work
+by Dietterich & Guyer (2022) has hinted at the fact that networks might identify OOD by the absence of
+known features, and not by the presence of new ones, providing a case in which posterior networks are likely
+to fail. Such evidence on OOD data and adversarial examples has indeed been identified by a study by
+Kopetzki et al. (2021). Exposing the model to (artificial) OOD data during training as done in the case of
+Malinin & Gales (2018; 2019); Nandy et al. (2020); Zhao et al. (2019) might alleviate this issue, but will
+never guarantee full coverage of all potential OOD cases. Lastly, Bengs et al. (2022) also prove how some of
+the used loss function used for training evidential models do not fulfill desiderata for epistemic uncertainty,
+pointing to a more fundamental flaw.
+27Under review as submission to TMLR
+B Fundamental Derivations Appendix
+This appendix section walks the reader through generalized versions of recurring theoretical results using
+Dirichlet distributions in a Machine Learning context, such as their expectation in Appendix B.1, their
+entropy in Appendix B.2 and the Kullback-Leibler divergence between two Dirichlets in Appendix C.3.
+B.1 Expectation of a Dirichlet
+Here, we show results for the quantities E[µk]andE[logµk]. For the first, we follow the derivation by Miller
+(2011). Another proof is given by Lin (2016).
+E[µk] =/integraldisplay
+···/integraldisplay
+µkΓ(α0)/producttextK
+k′=1Γ(α′
+k)K/productdisplay
+k′=1µαk′−1
+k′dµ1...dµK
+Movingµαk−1
+kout of the product:
+=/integraldisplay
+···/integraldisplayΓ(α0)/producttextK
+k′=1Γ(αk′)µαk−1+1
+k/productdisplay
+k′̸=kµαk′−1
+k′dµ1...dµK (15)
+For the next step, we define a new set of Dirichlet parameters with βk=αk+ 1and∀k′̸=k:βk′=αk′.
+For those new parameters, β0=/summationtext
+kβk= 1 +α0. So by virtue of the Gamma function’s property that
+Γ(β0) = Γ(α0+ 1) =α0Γ(α0), replacing all terms in the normalization factor yields
+=/integraldisplay
+···/integraldisplayαk
+α0Γ(β0)/producttextK
+k′=1Γ(βk′)K/productdisplay
+k′=1µβk′−1
+k′dµ1...dµK=αk
+α0
+where in the last step we obtain the final result, since the Dirichlet with new parameters βkmust nevertheless
+integrate to 1, and the integrals do not regard αkorα0. For the expectation E[logµk], we first rephrase
+the Dirichlet distribution in terms of the exponential family (Kupperman, 1964). The exponential family
+encompasses many commonly-used distributions, such as the normal, exponential, Beta or Poisson, which
+all follow the form
+p(x;η) =h(x) exp/parenleftbig
+ηTu(x)−A(η)/parenrightbig
+withnatural parameters η,sufficient statistic u(x), andlog-partition function A(η). For the Dirichlet
+distribution, Winn (2004) provides the sufficient statistic as u(µ) = [log µ1,...,µK]Tand the log-partition
+function
+A(α) =K/summationdisplay
+k=1log Γ(αk)−log Γ(αo) (16)
+By Mao (2019), we also find that by the moment-generating function that for the sufficient statistic, its
+expectation can be derived by
+E[u(x)k] =∂A(η)
+∂ηk(17)
+Therefore we can evaluate the expected value of logµk(i.e. the sufficient statistic) by inserting the definition
+of the log-partition function in Equation (16) into Equation (17):
+28Under review as submission to TMLR
+E[logµk] =∂
+∂αkK/summationdisplay
+k=1log Γ(αk)−log Γ(α0) =ψ(αk)−ψ(α0) (18)
+which corresponds precisely to the definition of the digamma function as ψ(x) =d
+dxlog Γ(x).
+B.2 Entropy of Dirichlet
+The following derivation is adapted from Lin (2016), with the result stated in Charpentier et al. (2020) as
+well.
+H[µ] =−E[logp(µ|α)]
+=−E/bracketleftbigg
+log/parenleftig1
+B(α)K/productdisplay
+k=1µαk−1
+k/parenrightig/bracketrightbigg
+=−E/bracketleftbigg
+−logB(α) +K/summationdisplay
+k=1(αk−1) logµk/bracketrightbigg
+= logB(α)−K/summationdisplay
+k=1(αk−1)E[logµk]
+Using Equation (18):
+= logB(α)−K/summationdisplay
+k=1(αk−1)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbig
+= logB(α) +K/summationdisplay
+k=1(αk−1)ψ(α0)−K/summationdisplay
+k=1(αk−1)ψ(αk)
+= logB(α) + (α0−K)ψ(α0)−K/summationdisplay
+k=1(αk−1)ψ(αk)
+B.3 Kullback-Leibler Divergence between two Dirichlets
+The following result is presented using an adapted derivation by Lin (2016) and appears in Chen et al. (2018)
+and Joo et al. (2020) as a starting point for their variational objective (see Appendix C.7). In the following
+we use Dir (µ;α)to denote the optimized distribution, and Dir (µ;γ)the reference or target distribution.
+KL/bracketleftig
+p(µ|α)/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|γ)/bracketrightig
+=E/bracketleftbigg
+logp(µ|α)
+p(µ|γ)/bracketrightbigg
+=E/bracketleftbigg
+logp(µ|α)/bracketrightbigg
+−E/bracketleftbigg
+logp(µ|γ)/bracketrightbigg
+=E/bracketleftbigg
+−logB(α) +K/summationdisplay
+k=1(αk−1) logµk/bracketrightbigg
+−E/bracketleftbigg
+−logB(γ) +K/summationdisplay
+k=1(γk−1) logµk/bracketrightbigg
+Distributing and pulling out B(α)andB(γ)out of the expectation (they don’t depend on µ):
+=−logB(γ)
+B(α)+E/bracketleftbiggK/summationdisplay
+k=1(αk−1) logµk−(γk−1) logµk/bracketrightbigg
+29Under review as submission to TMLR
+=−logB(γ)
+B(α)+E/bracketleftbiggK/summationdisplay
+k=1(αk−γk) logµk/bracketrightbigg
+Moving the expectation inward and using the identity E[µk] =ψ(αk)−ψ(α0)from Appendix B.1:
+=−logB(γ)
+B(α)+K/summationdisplay
+k=1(αk−γk)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbig
+The KL divergence is also used by some works as regularizer by penalizing the distance to a uniform Dirichlet
+withγ=1(Sensoy et al., 2018). In this case, the result above can be derived to be
+KL/bracketleftig
+p(µ|α)/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|1)/bracketrightig
+= logΓ(K)
+B(α)+K/summationdisplay
+k=1(αk−1)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbig
+where the log Γ(K)term can also be omitted for optimization purposes, since it does not depend on α.
+30Under review as submission to TMLR
+C Additional Derivations Appendix
+In this appendix we present relevant results in a Machine Learning context, including from some of the
+surveyed works, featuring as unified notation and annotated derivation steps. These include derivations
+of expected entropy (Appendix C.1) and mutual information (Appendix C.2) as uncertainty metrics for
+Dirichlet networks. Also, we derive a multitude of loss functions, including the l∞norm loss of a Dirichlet
+w.r.t. a one-hot encoded class label in Appendix C.3, the l2norm loss in Appendix C.4, as well as the reverse
+KL loss by Malinin & Gales (2019), the UCE objective Biloš et al. (2019); Charpentier et al. (2020) and
+ELBO Shen et al. (2020); Chen et al. (2018) as training objectives (Appendices C.5 to C.7).
+C.1 Derivation of Expected Entropy
+The following derivation is adapted from Malinin & Gales (2018) appendix section C.4. In the following, we
+assume that∀k∈K:µk>0:
+Ep(µ|x,ˆθ)/bracketleftbigg
+H/bracketleftig
+P(y|µ)/bracketrightig/bracketrightbigg
+=/integraldisplay
+p(µ|x,ˆθ)/parenleftbigg
+−K/summationdisplay
+k=1µklogµk/parenrightbigg
+dµ
+=−K/summationdisplay
+k=1/integraldisplay
+p(µ|x,ˆθ)/parenleftig
+µklogµk/parenrightig
+dµ
+Inserting the definition of p(µ|x,ˆθ)≈p(µ|x,D):
+=−K/summationdisplay
+k=1/parenleftigg
+Γ(α0)/producttextK
+k′=1Γ(αk′)/integraldisplay
+µklogµkK/productdisplay
+k′=1µαk′−1
+k′dµ/parenrightigg
+Singling out the factor µk:
+=−K/summationdisplay
+k=1/parenleftigg
+Γ(α0)
+Γ(αk)/producttext
+k′̸=kΓ(αk′)µαk−1
+k/integraldisplay
+µklogµk/productdisplay
+k′̸=kµαk′−1
+k′dµ/parenrightigg
+Adjusting the normalizing constant (this is the same trick used in Appendix B.1):
+=−K/summationdisplay
+k=1/parenleftigg
+αk
+α0/integraldisplayΓ(α0+ 1)
+Γ(αk+ 1)/producttext
+k′̸=kΓ(αk′)µαk−1
+klogµk/productdisplay
+k′̸=kµαk′−1
+k′dµ/parenrightigg
+Using the identity E[logµk] =ψ(αk)−ψ(α0)(Equation (18)). Since the expectation here is w.r.t to a
+Dirichlet with concentration parameters αk+ 1, we obtain
+=−K/summationdisplay
+k=1αk
+α0/parenleftbigg
+ψ(αk+ 1)−ψ(α0+ 1)/parenrightbigg
+C.2 Derivation of Mutual Information
+We start from the expression in Equation (8):
+I/bracketleftig
+y,µ/vextendsingle/vextendsingle/vextendsinglex,D/bracketrightig
+=H/bracketleftbigg
+Ep(µ|x,D)/bracketleftig
+P(y|µ)/bracketrightig/bracketrightbigg
+−Ep(µ|x,D)/bracketleftbigg
+H/bracketleftig
+P(y|µ)/bracketrightig/bracketrightbigg
+31Under review as submission to TMLR
+Given that E[µk] =αk
+α0(Appendix B.1) and assuming that point estimate p(µ|x,D)≈p(µ|x,ˆθ)is suffi-
+cient (Malinin & Gales, 2018), we can identify the first term as the Shannon entropy −/summationtextK
+k=1µklogµk=
+−/summationtextK
+k=1αk
+α0logαk
+α0. Furthermore, the second part we already derived in Appendix C.1 and thus we obtain:
+=−K/summationdisplay
+k=1αk
+α0logαk
+α0+K/summationdisplay
+k=1αk
+α0/parenleftbigg
+ψ(αk+ 1)−ψ(α0+ 1)/parenrightbigg
+=−K/summationdisplay
+k=1αk
+α0/parenleftbigg
+logαk
+α0−ψ(αk+ 1) +ψ(α0+ 1)/parenrightbigg
+C.3l∞Norm Derivation
+In this section we elaborate on the derivation of Tsiligkaridis (2019) deriving a generalized lploss, upper-
+bounding the l∞loss. This in turn allows us to easily derive the l2loss used by Sensoy et al. (2018); Zhao
+et al. (2020). Here we assume the classification target yis provided in the form of a one-hot encoded label
+y= [1y=1,...,1y=K]T.
+Ep(µ|x,θ)/bracketleftbig
+||y−µ||∞/bracketrightbig
+≤Ep(µ|x,θ)/bracketleftbig
+||y−µ||p/bracketrightbig
+(19)
+Using Jensen’s inequality
+≤/parenleftig
+Ep(µ|x,θ)/bracketleftbig
+||y−µ||p
+p/bracketrightbig/parenrightig1/p
+(20)
+Evaluating the expression with ∀k̸=y:yk= 0:
+=/parenleftig
+E[(1−µy)p] +/summationdisplay
+k̸=yE[µp
+k]/parenrightig1/p
+(21)
+In order to compute the expression above, we first realize that all components of µare distributed according
+to a Beta distribution Beta (α,β)(since the Dirichlet is a multivariate generalization of the beta distribution)
+for which the moment-generating function is given as follows:
+E[µp] =Γ(α+p)Γ(β)Γ(α+β)
+Γ(α+p+β)Γ(α)Γ(β)=Γ(α+p)Γ(α+β)
+Γ(α+p+β)Γ(α)
+Given that the first term in Equation (19) is characterized by Beta (α0−αy,αy)and the second one by
+Beta(αk,α0−αk), we can evaluate the result in Equation (19) using the moment generating function:
+Ep(µ|x,θ)/bracketleftig
+||y−µ||∞/bracketrightig
+≤/parenleftigg
+Γ(α0−αy+p)Γ(α0−αy+αy)
+Γ(α0−αy+p+αy)Γ(α0−αy)+/summationdisplay
+k̸=yΓ(αk+p)Γ(αk+α0−αk)
+Γ(αk+p+α0−αk)Γ(αk)/parenrightigg1
+p
+=/parenleftigg
+Γ(α0−αy+p)Γ(α0)
+Γ(α0+p)Γ(α0−αy)+/summationdisplay
+k̸=yΓ(αk+p)Γ(α0)
+Γ(p+α0)Γ(αk)/parenrightigg1
+p
+Factoring out common terms:
+=
+Γ(α0)
+Γ(α0+p)
+Γ(α0−αy+p)
+Γ(α0−αy)+/summationdisplay
+k̸=yΓ(αk+p)
+Γ(αk)
+
+1
+p
+32Under review as submission to TMLR
+Expressing α0−αk=/summationtext
+k̸=yαk:
+=/parenleftbiggΓ(α0)
+Γ(α0+p)/parenrightbigg1
+p
+Γ/parenleftig/summationtext
+k̸=yαk+p/parenrightig
+Γ/parenleftig/summationtext
+k̸=yαk/parenrightig+/summationdisplay
+k̸=yΓ(αk+p)
+Γ(αk)
+1
+p
+C.4l2Norm Loss Derivation
+Here we present an adapted derivation by Sensoy et al. (2018) for the l2-norm loss to train Dirichlet networks.
+Here we again use a one-hot vector for a label with y= [1y=1,...,1y=K]T.
+Ep(µ|x,θ)/bracketleftig
+||y−µ||2
+2/bracketrightig
+=E/bracketleftbiggK/summationdisplay
+k=1(1y=k−µk)2/bracketrightbigg
+(22)
+=E/bracketleftbiggK/summationdisplay
+k=112
+y=k−2µk1y=k+µ2
+k/bracketrightbigg
+(23)
+=K/summationdisplay
+k=112
+y=k−2E[µk]1y=k+E[µ2
+k] (24)
+Using the identity that E[µ2
+k] =E[µk]2+Var(µk):
+=K/summationdisplay
+k=112
+y=k−2E[µk]1y=k+E[µk]2+Var(µk) (25)
+=K/summationdisplay
+k=1/parenleftig
+1y=k−E[µk]/parenrightig2
++Var(µk) (26)
+Finally, we use the result from Appendix B.1 and the result that Var (µk) =αk(α0−αk)
+α2
+0(α0+ 1)(see Lin, 2016):
+=K/summationdisplay
+k=1/parenleftig
+1y=k−αk
+α0/parenrightig2
++αk(α0−αk)
+α2
+0(α0+ 1)(27)
+C.5 Derivation of Reverse KL loss
+Here we re-state and annotate the derivation of reverse KL loss by Malinin & Gales (2019) in more detail,
+starting from the forward KL loss by Malinin & Gales (2018). Note that here, ˆαcontains a dependence on k,
+since Malinin & Gales (2018) let ˆαk= ˆµkˆα0with ˆα0being a hyperparameter and ˆµk=1k=y+(−1k=yK+1)ε
+andεbeing a small number.
+Ep(x,y)/bracketleftbiggK/summationdisplay
+k=11y=kKL/bracketleftig
+p(µ|ˆα)/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|x,θ)/bracketrightig/bracketrightbigg
+=Ep(x,y)/bracketleftbiggK/summationdisplay
+k=11y=k/integraldisplay
+p(µ|ˆα) logp(µ|ˆα)
+p(µ|x,θ)dµ/bracketrightbigg
+Writing the expectation explicitly:
+=/integraldisplayK/summationdisplay
+k=1p(y=k,x)K/summationdisplay
+k=11y=k/integraldisplay
+p(µ|ˆα) logp(µ|ˆα)
+p(µ|x,θ)dµdx
+33Under review as submission to TMLR
+=/integraldisplayK/summationdisplay
+k=1p(x)P(y=k|x)K/summationdisplay
+k=11y=k/integraldisplay
+p(µ|ˆα) logp(µ|ˆα)
+p(µ|x,θ)dµdx
+=Ep(x)/bracketleftiggK/summationdisplay
+k=1P(y=k|x)K/summationdisplay
+k=11y=k/integraldisplay
+p(µ|ˆα) logp(µ|ˆα)
+p(µ|x,θ)dµ/bracketrightigg
+Adding factor in log, collapsing double sum:
+=Ep(x)/bracketleftiggK/summationdisplay
+k=1P(y=k|x)/integraldisplay
+p(µ|ˆα) log/parenleftigg
+p(µ|ˆα)/summationtextK
+k=1P(y=k|x)
+p(µ|x,θ)/summationtextK
+k=1P(y=k|x)/parenrightigg
+dµ/bracketrightigg
+Reordering, separating constant factor from log:
+=Ep(x)/bracketleftigg/integraldisplayK/summationdisplay
+k=1P(y=k|x)p(µ|ˆα)/parenleftigg
+log/parenleftbigg/summationtextK
+k=1P(y=k|x)p(µ|ˆα)
+p(µ|x,θ)/parenrightbigg
+−log/parenleftigK/summationdisplay
+k=1P(y=k|x)/parenrightig
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+=0/parenrightigg
+dµ/bracketrightigg
+=Ep(x)/bracketleftigg
+KL/bracketleftbiggK/summationdisplay
+k=1P(y=k|x)p(µ|ˆα)
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+Mixture of KDirichlets/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|x,θ)/bracketrightbigg/bracketrightigg
+where we can see that this objective actually tries to minimizes the divergence towards a mixture of K
+Dirichletdistributions. Inthecaseofhighdatauncertainty, thisisclaimedincentivizethemodeltodistribute
+massaroundeachofthecornersofthesimplex, insteadofthedesiredbehaviorshowninFigure2c. Therefore,
+Malinin & Gales (2019) propose to swap the order of arguments in the KL-divergence, resulting in the
+following:
+Ep(x)/bracketleftbiggK/summationdisplay
+k=1P(y=k|x)·KL/bracketleftig
+p(µ|x,θ)/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|ˆα)/bracketrightig/bracketrightbigg
+=Ep(x)/bracketleftbiggK/summationdisplay
+k=1p(y=k|x)·/integraldisplay
+p(µ|x,θ) logp(µ|x,θ)
+p(µ|ˆα)dµ/bracketrightbigg
+Reordering:
+=Ep(x)/bracketleftbigg/integraldisplay
+p(µ|x,θ)K/summationdisplay
+k=1P(y=k|x) logp(µ|x,θ)
+p(µ|ˆα)dµ/bracketrightbigg
+=Ep(x)/bracketleftigg
+Ep(µ|x,θ)/bracketleftbiggK/summationdisplay
+k=1P(y=k|x) logp(µ|x,θ)−K/summationdisplay
+k=1P(y=k|x) logp(µ|ˆα)/bracketrightbigg/bracketrightigg
+=Ep(x)/bracketleftigg/integraldisplay
+p(µ|x,θ)/parenleftbigg
+log/parenleftbiggK/productdisplay
+k=1p(µ|x,θ)P(y=k|x)/parenrightbigg
+−log/parenleftbiggK/productdisplay
+k=1p(µ|ˆα)P(y=k|x)/parenrightbigg/parenrightbigg
+dµ/bracketrightigg
+=Ep(x)/bracketleftigg/integraldisplay
+p(µ|x,θ)/parenleftbigg
+log/parenleftbigg
+p(µ|x,θ)/summationtextK
+k=1P(y=k|x)/parenrightbigg
+−log/parenleftbiggK/productdisplay
+k=1/parenleftig1
+B(α)K/productdisplay
+k′=1µαk′−1
+k′/parenrightigp(y=k|x)/parenrightbigg/parenrightbigg
+dµ/bracketrightbigg
+34Under review as submission to TMLR
+=Ep(x)/bracketleftigg/integraldisplay
+p(µ|x,θ)/parenleftbigg
+log/parenleftbig
+p(µ|x,θ)/parenrightbig
+−log/parenleftbiggK/productdisplay
+k=1/parenleftig1
+B(α)K/productdisplay
+k′=1µαk′−1
+k′/parenrightigP(y=k|x)/parenrightbigg
+dµ/bracketrightigg
+=Ep(x)/bracketleftigg/integraldisplay
+p(µ|x,θ)/parenleftbigg
+log/parenleftbig
+p(µ|x,θ)/parenrightbig
+−log/parenleftbigg1
+B(α)K/productdisplay
+k′=1µ/summationtextK
+k=1P(y=k|x)αk′−1
+k′/parenrightbigg
+dµ/bracketrightigg
+=Ep(x)/bracketleftigg
+KL/bracketleftig
+p(µ|x,θ)||p(µ|¯α)/bracketrightig/bracketrightigg
+where ¯α=K/summationdisplay
+k=1p(y=k|x)αk′
+Therefore, instead of a mixture of Dirichlet distribution, we obtain a single distribution whose parameters
+are a mixture of the concentrations of each class.
+C.6 Uncertainty-aware Cross-Entropy Loss
+The uncertainty-aware cross-entropy loss in Biloš et al. (2019); Charpentier et al. (2020) has the form
+LUCE=Ep(µ|x,θ)[logp(y|µ)] =E[logµy] =ψ(αy)−ψ(α0)
+asp(y|µ)is given by the true label in form of a delta distribution, we can apply the result from Appendix B.1.
+C.7 Evidence-Lower Bound For Dirichlet Posterior Estimation
+The evidence lower bound is a well-known objective to optimize the KL-divergence between an approximate
+proposal and target distribution (Jordan et al., 1999; Kingma & Welling, 2014). We derive it based on
+Chen et al. (2018) in the following for the Dirichlet case with a proposal distribution p(µ|x,θ)to the target
+distribution p(µ|y). For the first part of the derivation, we omit the dependence on βfor clarity.
+KL/bracketleftbig
+p(µ|x,θ)/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|y)/bracketrightbig
+=Ep(µ|x,θ)/bracketleftbigg
+logp(µ|x,θ)
+p(µ|y)/bracketrightbigg
+=Ep(µ|x,θ)/bracketleftbigg
+logp(µ|x,θ)p(y)
+p(µ,y)/bracketrightbigg
+Factorizing p(µ,y) =P(y|µ)p(µ), pulling out p(y)as it doesn’t depend on µ:
+=Ep(µ|x,θ)/bracketleftbigg
+logp(µ|x,θ)
+P(y|µ)p(µ)/bracketrightbigg
++p(y)
+=Ep(µ|x,θ)/bracketleftbigg
+logp(µ|x,θ)
+p(µ)/bracketrightbigg
+−Ep(µ|x,θ)/bracketleftbig
+logP(y|µ)/bracketrightbig
++p(y)
+≤KL/bracketleftbig
+p(µ|x,θ)/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ)/bracketrightbig
+−Ep(µ|x,θ)/bracketleftbig
+logP(y|µ)/bracketrightbig
+Now note that the second part of the result is the uncertainty-aware cross-entropy loss from Appendix C.6
+and re-adding the dependence of p(µ)onγ, we can re-use our result regarding the KL-divergence between
+two Dirichlets in Appendix B.3 and thus obtain:
+LELBO =ψ(βy)−ψ(β0)−logB(β)
+B(γ)+K/summationdisplay
+k=1(βk−γk)/parenleftbig
+ψ(βk)−ψ(β0)/parenrightbig
+(28)
+which is exactly the solution obtained by both Chen et al. (2018) and Joo et al. (2020).
+35Under review as submission to TMLR
+D Overview over Loss Functions Appendix
+In Tables 5 and 6, we compare the forms of the loss function used by Evidential Deep Learning methods for
+classification, using the consistent notation from the paper. Most of the presented results can be found in
+the previous Appendix B and Appendix C. We refer to the original work for details about the objective of
+Nandy et al. (2020).
+36Under review as submission to TMLR
+Table 5: Overview over objectives used by prior networks for classification.
+Method Loss function Regularizer Comment
+Prior networks
+(Malinin & Gales, 2018)logB(ˆα)
+B(α)+/summationtextK
+k=1(αk−ˆαk)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbig
+−logΓ(K)
+B(α)+/summationtextK
+k=1(αk−1)(ψ(αk)−ψ(α0)) Target concentration parameters ˆαare created
+using a label smoothing approach,
+i.e.ˆµk=/braceleftigg
+1−(K−1)εify=k
+ε ify̸=k.
+Together with setting ˆα0as a hyperparameter,
+ˆαk= ˆµkˆα0
+Prior networks
+(Malinin & Gales, 2019)logB(ˆα)
+B(α)+/summationtextK
+k=1(αk−ˆαk)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbig
+logB(¯α)
+B(α)+/summationtextK
+k=1(αk−¯αk)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbig
+Similar to above, ˆα(k)
+c=1c=kαin+ 1
+for in-distribution and ¯α(k)
+c=1c=kαout+ 1
+where we have hyperparameters set to αin= 0.01
+andαout= 0. Then finally, ˆα=/summationtextK
+k=1p(y=k|x)ˆαk
+and ¯α=/summationtextK
+k=1p(y=k|x)¯αk.
+Information Robust
+Dirichlet Networks
+(Tsiligkaridis, 2019)/parenleftbigg
+Γ(α0)
+Γ(α0+p)/parenrightbigg1
+p
+Γ/parenleftig/summationtext
+k̸=yαk+p/parenrightig
+Γ/parenleftig/summationtext
+k̸=yαk/parenrightig+/summationtext
+k̸=yΓ(αk+p)
+Γ(αk)
+1
+p
+1
+2/summationtext
+k̸=y(αk−1)2(ψ(1)(αk)−ψ(1))(α0)) ψ(1)is the polygamma function defined as
+ψ(1)(x) =d
+dxψ(x).
+Dirichlet via Function
+Decomposition
+(Biloš et al., 2019)ψ(αy)−ψ(α0) λ1/integraltextT
+0µk(τ)2dτ+λ2/integraltextT
+0(ν−σ2(τ))2dτ Factorsλ1andλ2that are treated as hyperparameters
+that weigh first term pushing the for logit kto zero,
+while pushing the variance in the first term to ν.
+Prior network
+with PAC Reg.
+(Haussmann et al., 2019)−logE/bracketleftbigg/producttextK
+k=1/parenleftbigg
+αk
+α0/parenrightbigg1k=y/bracketrightbigg/radicalbigg
+KL/bracketleftbig
+p(µ|α)/vextendsingle/vextendsingle/vextendsingle/vextendsinglep(µ|1)/bracketrightbig
+−logδ
+N−1 The expectation in the loss function is evaluated
+using parameter samples from a weight distribution.
+δ∈[0,1].
+Ensemble Distribution
+Distillation
+(Malinin et al., 2020b)ψ(α0)−/summationtextK
+k=1ψ(αk) +1
+M/summationtextM
+m=1/summationtextK
+k=1(αk−1)
+logp(y=k|x,θ(m))- The objective uses predictions from a trained ensemble
+with parameters θ1,...,θM.
+Prior networks with
+representation gap
+(Nandy et al., 2020)−logµy−λin
+K/summationtextK
+k=1σ(αk) −/summationtext
+k=11
+Klogµk−λout
+K/summationtextK
+k=1σ(αk) The main objective is being optimized on in-distribution,
+the regularizer on out-of-distribution data. λinand
+λoutweighing terms and σdenotes the sigmoid function.
+Prior RNN
+(Shen et al., 2020)/summationtext
+k=11k=ylogµk −logB(˜α) + (ˆα0−K)ψ(ˆα0)−/summationtextK
+k=1(ˆαk−1)ψ(ˆαk)Here, the entropy regularizer operates on a scaled version of the
+concentration parameters ˜α= (IK−W)α, where Wis learned.
+Graph-based Kernel
+Dirichlet dist. est. (GKDE)
+(Zhao et al., 2020)/summationtextK
+k=1/parenleftig
+1y=k−αk
+α0/parenrightig2
++αk(α0−αk)
+α2
+0(α0+1)−logB(α)
+B(ˆα)+/summationtextK
+k=1(αk−ˆαk)/parenleftbig
+ψ(αk)−ψ(α0)/parenrightbigˆαhere corresponds to a uniform prior including some
+information about the local graph structure. The authors
+also use an additional knowledge distillation objective,
+which was omitted here since it doesn’t related to the Dirichlet.
+37Under review as submission to TMLR
+Table 6: Overview over objectives used by posterior networks for classification.
+Method Loss function Regularizer Comment
+Evidential Deep Learning
+(Sensoy et al., 2018)/summationtextK
+k=1/parenleftig
+1y=k−βk
+β0/parenrightig2
++βk(β0−βk)
+β2
+0(β0+1)−logΓ(K)
+B(β)+/summationtextK
+k=1(βk−1)(ψ(βk)−ψ(β0))
+Variational Dirichlet
+(Chen et al., 2018)ψ(βy)−ψ(β0) −logB(β)
+B(γ)+/summationtextK
+k=1(βk−γk)/parenleftbig
+ψ(βk)−ψ(β0)/parenrightbig
+Regularized ENN
+Zhao et al. (2019)/summationtextK
+k=1/parenleftig
+1y=k−βk
+β0/parenrightig2
++βk(β0−βk)
+β2
+0(β0+1)−λ1Epout(x,y)/bracketleftig
+αy
+α0/bracketrightig
+−λ2Epconfl.(x,y)/bracketleftigg
+/summationtextK
+k=1/parenleftbigg
+βk/summationtext
+k′̸=kβk′/parenleftbig
+1−|βk′−βk|
+βk′+βk/parenrightbig
+/summationtext
+k′̸=kβk′/parenrightbigg/bracketrightigg
+The first term represents vacuity, i.e. the lack of evidence and is
+optimized using OOD examples. The second term stands for dissonance ,
+and is computed using points with neighborhoods with different classes
+from their own. λ1,λ2are hyperparameters.
+WGAN–ENN
+(Hu et al., 2021)/summationtextK
+k=1/parenleftig
+1y=k−βk
+β0/parenrightig2
++βk(β0−βk)
+β2
+0(β0+1)−λEpout(x,y)/bracketleftig
+αy
+α0/bracketrightig
+Belief Matching
+(Joo et al., 2020)ψ(βy)−ψ(β0) −logB(β)
+B(γ)+/summationtextK
+k=1(βk−γk)/parenleftbig
+ψ(βk)−ψ(β0)/parenrightbig
+Posterior networks
+(Charpentier et al., 2020)ψ(βy)−ψ(β0) −logB(β) + (β0−K)ψ(β0)−/summationtextK
+k=1(βk−1)ψ(βk)
+Graph Posterior Networks
+(Stadler et al., 2021)ψ(βy)−ψ(β0) −logB(β) + (β0−K)ψ(β0)−/summationtextK
+k=1(βk−1)ψ(βk)
+Generative Evidential
+Neural Network
+(Sensoy et al., 2020)−/summationtextK
+k=1/parenleftbigg
+Epin(x)/bracketleftbig
+log(σ(fθ(x)))/bracketrightbig
++Epout(x)/bracketleftbig
+log(1−σ(fθ(x)))/bracketrightbig/parenrightbigg
+−logΓ(K)
+B(β−y)+/summationtext
+k̸=y(βk−1)(ψ(βk)−ψ(β0)) The main loss is a discriminative loss using ID and OOD samples,
+generated by a VAE. The regularizer is taken over all classes
+excluding the true class y(also indicated by β−y).
+38

@@ -1,0 +1,985 @@
+Published in Transactions on Machine Learning Research (MM/YYYY)
+Numerical Accounting in the Shuﬄe Model of
+Diﬀerential Privacy
+Antti Koskela antti.h.koskela@nokia-bell-labs.com
+Nokia Bell Labs
+University of Helsinki
+Mikko Heikkilä mikko.a.heikkila@helsinki.ﬁ
+Department of Computer Science
+University of Helsinki
+Antti Honkela antti.honkela@helsinki.ﬁ
+Department of Computer Science
+University of Helsinki
+Reviewed on OpenReview: https://openreview.net/forum?id=11osftjEbF
+Abstract
+Shuﬄe model of diﬀerential privacy is a novel distributed privacy model based on a
+combination of local privacy mechanisms and a secure shuﬄer. It has been shown that
+the additional randomisation provided by the shuﬄer improves privacy bounds compared
+to the purely local mechanisms. Accounting tight bounds, however, is complicated by
+the complexity brought by the shuﬄer. The recently proposed numerical techniques for
+evaluating (ε,δ)-diﬀerential privacy guarantees have been shown to give tighter bounds than
+commonly used methods for compositions of various complex mechanisms. In this paper,
+we show how to utilise these numerical accountants for adaptive compositions of general
+ε-LDP shuﬄers and for shuﬄers of k-randomised response mechanisms, including their
+subsampled variants. This is enabled by an approximation that speeds up the evaluation of
+the corresponding privacy loss distribution from O(n2)toO(n), wherenis the number of
+users, without noticeable change in the resulting δ(ε)-upper bounds. We also demonstrate
+looseness of the existing bounds and methods found in the literature, improving previous
+composition results for shuﬄers signiﬁcantly.
+1 Introduction
+Theshuﬄemodelofdiﬀerentialprivacy(DP)isadistributedprivacymodelwhichsitsbetweenthehightrust–
+high utility centralised DP, and the low trust–low utility local DP (LDP). In the shuﬄe model, the individual
+results from local randomisers are only released through a secure shuﬄer. This additional randomisation
+leads to “ampliﬁcation by shuﬄing”, resulting in better privacy bounds against adversaries without access
+to the unshuﬄed local results.
+We consider computing privacy bounds for both single and composite shuﬄe protocols, where by composite
+protocol we mean a protocol, where the subsequent user-wise local randomisers depend on the same local
+datasets and possibly on the previous output of the shuﬄer, and at each round the results from the local
+randomisers are independently shuﬄed. Moreover, using the analysis by Feldman et al. (2023), we provide
+bounds in the case the subsequent local randomisers are allowed to depend adaptively on the output of the
+previous ones.
+In this paper we show how numerical accounting (Koskela et al., 2020; 2021; Gopi et al., 2021) can be
+employed for privacy analysis of both single and composite shuﬄe DP mechanisms. We demonstrate that
+1Published in Transactions on Machine Learning Research (MM/YYYY)
+thus obtained bounds can be up to orders of magnitudes tighter than the existing bounds from the literature.
+We also evaluate how signiﬁcantly adversaries with varying capabilities diﬀer in terms of the resulting privacy
+bounds using the k-randomised response mechanism. For conciseness, most of the proofs are given in the
+Appendix.
+1.1 Related work
+DP was originally deﬁned in the central model assuming a trusted aggregator by Dwork et al. (2006), while
+the fully distributed LDP was formally introduced and analysed by Kasiviswanathan et al. (2011). Closely
+related to the shuﬄe model of DP, Bittau et al. (2017) proposed the Encode, Shuﬄe, Analyze framework for
+distributed learning, which uses the idea of secure shuﬄer for enhancing privacy. The shuﬄe model of DP
+was formally deﬁned by Cheu et al. (2019), who also provided the ﬁrst separation result showing that the
+shuﬄe model is strictly between the central and the local models of DP. Another direction initiated by Cheu
+et al. (2019) and continued, e.g., by Balle et al. (2020b); Ghazi et al. (2021) has established a separation
+between single- and multi-message shuﬄe protocols.
+There exists several papers on privacy ampliﬁcation by shuﬄing, some of which are central to this paper.
+Erlingsson et al. (2019) showed that the introduction of a secure shuﬄer ampliﬁes the privacy guarantees
+against an adversary, who is not able to access the outputs from the local randomisers but only sees the
+shuﬄed output. Balle et al. (2019) improved the ampliﬁcation results and introduced the idea of privacy
+blanket, which we also utilise in our analysis of k-randomised response. Feldman et al. (2021) used a related
+idea of hiding in the crowd to improve on the previous results, and their analysis was further improved
+in (Feldman et al., 2023). Girgis et al. (2021) generalised shuﬄing ampliﬁcation further to scenarios with
+composite protocols and parties with more than one local sample under simultaneous communication and
+privacy restrictions. We use the improved results of Feldman et al. (2023) in the analysis of general LDP
+mechanisms, and compare our bounds with theirs in Section 3.3. We also calculate privacy bounds in the
+setting considered by Girgis et al. (2021), namely in the case where a subset of users sending contributions to
+the shuﬄers are sampled randomly. This can be seen as a subsampled mechanism and we are able to combine
+the analysis of Feldman et al. (2023), the privacy loss distribution related subsampling results of Zhu et al.
+(2022) and FFT accounting to obtain tighter (ε,δ)-bounds than Girgis et al. (2021), as shown in Section 3.4.
+2 Background: numerical privacy accounting
+Before analysing the shuﬄed mechanisms we introduce some required theory and notations. In particular,
+we use the privacy loss distribution formalism, which is based on ﬁnding the so-called dominating pairs of
+distributions for the given mechanisms. For more detailed presentations of the theory, we refer to Koskela
+et al. (2021); Gopi et al. (2021); Zhu et al. (2022).
+2.1 Diﬀerential privacy and privacy loss distribution
+An input dataset containing ndata points is denoted as X= (x1,...,xn)∈Xn, wherexi∈X,1≤i≤n.
+We sayX,X/prime∈Xnare neighbours if we get one by substituting one element in the other (denoted X∼X/prime).
+Deﬁnition 1. Letε >0andδ∈[0,1]. LetPandQbe two random variables taking values in the same
+measurable space O. We say that PandQare(ε,δ)-indistinguishable, denoted P/similarequal(ε,δ)Q, if for every
+measurable set E⊂Owe have
+Pr(P∈E)≤eεPr(Q∈E) +δ, Pr(Q∈E)≤eεPr(P∈E) +δ.
+Deﬁnition 2. Letε > 0andδ∈[0,1]. MechanismM:Xn→Ois(ε,δ)-DP if for every X∼X/prime:
+M(X)/similarequal(ε,δ)M(X/prime). We callMtightly (ε,δ)-DP, if there does not exist δ/prime<δsuch thatMis(ε,δ/prime)-DP.
+When the data are distributed among several parties, and the local datasets are only accessed via purely local
+DP mechanisms, we say that the mechanisms guarantee local DP (LDP) and call the local DP mechanisms
+local randomisers (Kasiviswanathan et al., 2011).
+2Published in Transactions on Machine Learning Research (MM/YYYY)
+WerelyontheresultsofZhuetal.(2022)andcharacterise (ε,δ)-DPboundsusingthehockey-stickdivergence,
+which forα≥0is deﬁned as
+Hα(P||Q) =/integraldisplay
+[P(t)−α·Q(t)]+dt,
+where forx∈R,x+= max{0,x}. Using the hockey-stick divergence, by (Lemma 5, Zhu et al., 2022), tight
+(ε,δ)-DP bounds can also be characterised as
+δ(ε) = max
+X∼X/primeHeε(M(X)||M(X/prime)).
+We can generally ﬁnd (ε,δ)-bounds by analysing dominating pairs of distributions:
+Deﬁnition 3 (Zhu et al. 2022) .A pair of distributions (P,Q)is a dominating pair of distributions for
+mechanismMif for allα≥0,
+max
+X∼X/primeHα(M(X)||M(X/prime))≤Hα(P||Q).
+Using dominating pairs of distributions, we can obtain δ(ε)-upper bounds for adaptive compositions:
+Theorem 4 (Zhu et al. 2022) .If(P,Q)dominatesMand(P/prime,Q/prime)dominatesM/prime, then (P×P/prime,Q×Q/prime)
+dominates the adaptive composition M◦M/prime.
+Having dominating pairs of distributions for each individual mechanism in a composition, the hockey-stick
+divergence can be transformed into a more easily computable form by using the privacy loss random variables
+(PRVs). PRV for a pair of distributions (P,Q)is deﬁned as follows.
+Deﬁnition 5. LetP(t)andQ(t)be probability density functions. We deﬁne the PRV ωP/Qas
+ωP/Q= logP(t)
+Q(t), t∼P(t),
+wheret∼P(t)means that tis distributed according to P(t).
+With a slight abuse of notation, we denote the probability density function of the random variable ωP/Qby
+ωP/Q(t), and call it the privacy loss distribution (PLD).
+Theδ(ε)-bounds can be stated using the following representation that involves the PRV.
+Theorem 6 (Gopi et al. 2021) .We have:
+Heε(P||Q) =EωP/Q/bracketleftbig
+1−eε−ωP/Q/bracketrightbig
++, (2.1)
+Moreover, if ωP/Qis a PRV for the pair of distributions (P,Q)andωP/prime/Q/primea PRV for the pair of distributions
+(P/prime,Q/prime), then the PRV for the pair of distributions (P×P/prime,Q×Q/prime)is given by ωP/Q+ωP/prime/Q/prime
+By identifying dominating pairs of distributions for each mechanism in a composition and by formulating the
+δ(ε)-bound via hockey-stick divergence as an integral of the form given in Equation 2.1, the numerical PLD
+accountants (Koskela et al., 2021; Gopi et al., 2021) can be utilised for computing accurate δ(ε)-bounds.
+We will also use the following subsampling ampliﬁcation result (Proposition 30, Zhu et al., 2022), which
+leads to a privacy proﬁle for the composed mechanism M◦SSubset, whereSSubsetdenotes a subsampling
+procedure where, from an input of nentries, a ﬁxed sized subset of q·n,0< q≤1, entries is sampled
+without replacement.
+Lemma 7 (Zhu et al. 2022) .Denote the subsampled mechanism /tildewiderM:=M◦SSubset. Suppose a pair of
+distributions (P,Q)is a dominating pair of distributions for a mechanism Mfor all datasets of size q·n
+under the∼-neighbouring relation (i.e., the substitute relation), where q >0is the subsampling ratio (size
+of the subset divided by n). Then, for all neighbouring datasets (under the ∼-neighbouring relation) Xand
+Yof sizen,
+Hα/parenleftbig/tildewiderM(X)||/tildewiderM(Y)/parenrightbig
+≤Hα/parenleftbig
+q·P+ (1−q)·Q||Q/parenrightbig
+,forα≥1,
+Hα/parenleftbig/tildewiderM(X)||/tildewiderM(Y)/parenrightbig
+≤Hα/parenleftbig
+P||q·Q+ (1−q)·P/parenrightbig
+,for0≤α<1.(2.2)
+3Published in Transactions on Machine Learning Research (MM/YYYY)
+Considering the assumptions of Lemma 7, if we deﬁne a function h:R≥0→R
+h(α) = max{Hα/parenleftbig
+q·P+ (1−q)·Q||Q/parenrightbig
+,Hα/parenleftbig
+P||q·Q+ (1−q)·P/parenrightbig
+}, (2.3)
+we see that h(α)clearly deﬁnes a privacy proﬁle: it is convex and has all the other required properties
+of a privacy proﬁle. Thus we can use an existing numerical method (Doroshenko et al., 2022, Algorithm
+1) with the function hto obtain discrete-valued distributions /tildewidePand/tildewideQ, that are a dominating pair for
+/tildewiderM=M◦SSubset.
+We remark that by (Theorem 10, Zhu et al., 2022), the two pairs of distributions on the right-hand side
+of Equation 2.2 give dominating pairs for remove and add neighbouring relations of datasets in case the pair
+(P,Q)is a dominating pair of distributions for Munder remove and add neighbouring relations, respectively,
+and can therefore be used to compute (ε,δ)-upper bounds in case of add/remove neighbouring relations of
+datasets. Then, the computation is more straightforward since one can simply take the maximum of the
+δ(ε)-values obtained under the remove and add neighbouring relations and therefore using the techniques
+of Doroshenko et al. (2022) is not necessary. We focus on using the ∼-relation as the dominating pair (P,Q)
+obtained using both the post-processing results of (Feldman et al., 2023) and using our analysis for the k-RR
+local randomiser is a dominating pair under the ∼-relation. The∼-relation is also behind the baseline bounds
+by Girgis et al. (2021). We illustrate in Fig. 1 the accuracy of the numerical construction of (Doroshenko
+et al., 2022, Algorithm 1) applied to the privacy proﬁle given in Equation 2.3.
+2.2 Numerical PLD accounting using FFT
+In order to evaluate integrals of the form given in Equation 2.1, we use the Fast Fourier Transform (FFT)-
+based method by Koskela et al. (2021) called the Fourier Accountant (FA). This means that each PLD is
+truncated and placed on an equidistant numerical grid over an interval [−L,L],L > 0. The distributions
+for the sums of the PRVs are given by convolutions of the individual PLDs and are evaluated using the FFT
+algorithm. By a careful error analysis the error incurred by the numerical method can be bounded and an
+upperδ(ε)-bound obtained. We note that alternatively, for accurately computing the integrals we could also
+use the FFT-based method proposed by Gopi et al. (2021).
+3 General shuﬄed ε0-LDP mechanisms
+Feldman et al. (2023) consider general ε0-LDP local randomisers combined with a shuﬄer. The analysis
+allows also sequential adaptive compositions of the user contributions before shuﬄing. The analysis is based
+on decomposing individual LDP contributions to mixtures of data dependent part and noise, which leads to
+ﬁnding (ε,δ)-bounds for the pair of 2-dimensional random variables (see Thm. 3.1 of Feldman et al., 2023)
+P= (A+ ∆ 1,C−A+ ∆ 2), Q = (A+ ∆ 2,C−A+ ∆ 1), (3.1)
+where forn∈N,
+C∼Bin(n−1,2p), A∼Bin/parenleftbig
+C,1
+2/parenrightbig
+,∆1∼Bern (eε0p)and ∆2∼Bin/parenleftBig
+1−∆1,p
+1−eε0p/parenrightBig
+,(3.2)
+andp=1
+eε0+1. Intuitively, Cdenotes the number of other users whose mechanism outputs are
+indistinguishable “clones” of the two diﬀering users, with Adenoting random split between these. Using
+the following lemma, we can use the FFT-based numerical accountants to obtain accurate bounds also for
+adaptive compositions of general ε0-LDP shuﬄing mechanisms:
+Lemma 8. LetXandX/primebe neighbouring datasets and denote by As(X)andAs(X/prime)outputs of the shuﬄers
+of adaptive ε0-LDP local randomisers (for a detailed description of As, see Thm. 3.1 by Feldman et al., 2023,
+which uses the same notation). Then, for all α≥0,
+Hα(As(X)||As(X/prime))≤Hα(P||Q),
+wherePandQare given in Equation 3.1.
+4Published in Transactions on Machine Learning Research (MM/YYYY)
+Proof.By Thm. 3.1 of Feldman et al. (2023) there exists a post-processing algorithm Φsuch thatAs(X)
+is distributed identically to Φ(P)andAs(X/prime)identically to Φ(Q). The claim follows then from the data-
+processing inequality which holds for the hockey-stick divergence (Balle et al., 2020a).
+Corollary 9. The pair of distributions (P,Q)given in Equation 3.1 is a dominating pair of distributions
+for the shuﬄing mechanism As(X).
+Furthermore, using Thm. 4, we can bound the δ(ε)ofnc-wise adaptive composition of the shuﬄer Asusing
+product distributions of Ps andQs:
+Corollary 10. DenoteAncs(X,z 0) =As(X,As(X,...As(X,z 0)))for some initial state z0. For all
+neighbouring datasets XandX/primeand for all α≥0,
+Hα(Anc
+s(X)||Anc
+s(X/prime))≤Hα(P×...×P||Q×...×Q), (3.3)
+We remark that the case of heterogeneous adaptive compositions (e.g. varying nandε0) can be handled
+analogously using Thm. 4.
+Thus, using the bound of Equation 3.3 for α= eε, we get upper bounds for adaptive compositions of general
+shuﬄedε0-LDP mechanisms with the Fourier accountant by ﬁnding the PLD for the distributions P,Q
+(given in Equation 3.1). Note that even though the resulting (ε,δ)-bound is tight for P’s andQ’s, it need
+not be tight for a speciﬁc mechanism like the shuﬄed k-RR. The bound simply gives an upper bound for
+any shuﬄed ε0-LDP mechanisms.
+3.1 PLD for shuﬄed ε0-LDP mechanisms
+To analyse compositions of general shuﬄed ε0-LDP mechanisms, we need to form the PLD ωP/Qdetermined
+byPandQof Equation 3.1. Denoting q= eε0pand/tildewideq=p
+1−eε0p,p=1
+eε0+1, and writing out the randomness
+of∆1and∆2as mixtures, we see that the random variables PandQgiven in Equation 3.1 can be expressed
+as
+P=q·P0+ (1−q)/tildewideq·P1+ (1−q)(1−/tildewideq)·P2, Q = (1−q)/tildewideq·P0+q·P1+ (1−q)(1−/tildewideq)·P2,
+where
+P0∼(A+ 1,C−A), P 1∼(A,C−A+ 1), P 2= (A,C−A)
+andAandCare as given in Equation 3.2. In the Appendix, we give the required expressions to determine
+the discrete-valued PLD
+ωP/Q(s) =/summationdisplay
+a,bP(P= (a,b))·δs(a,b)(s), s (a,b)= log/parenleftBig
+P(P=(a,b))
+P(Q=(a,b))/parenrightBig
+, (3.4)
+whereδs(·),s∈R, denotes the Dirac delta function centred at s, and similarly also for ωQ/P(s).
+3.2 Lowering PLD computational complexity using Hoeﬀding’s inequality
+The PLD of Equation 3.4 has O(n2)terms, which makes its naive evaluation overly expensive for a large
+numberofusers n. Usinganappropriatetailbound(Hoeﬀding)forthebinomialdistribution, wecantruncate
+part of the probability mass and add it directly to δ. More speciﬁcally, if each PLD ωi,1≤i≤nc, in annc-
+wise composition is approximated by a truncated distribution /tildewideωisuch that the truncated probability masses
+areτi≥0, respectively, then δ(ε) =/tildewideδ(ε) +δ(∞), where/tildewideδ(ε)is the value of the integral in Equation 2.1
+obtained with the truncated PLDs and δ(∞) = 1−/producttext
+i(1−τi)≤/summationtext
+iτi, gives an upper bound for the
+composition without truncations. Using the Hoeﬀding’s inequality we obtain an accurate approximation of
+ωP/Qwith onlyO(n)terms. We formalise this approximation as follows:
+Lemma 11. Let the PLD ωP/Qbe deﬁned as in Equation 3.4 (Equation 3.1 gives PandQwhich include
+C∼Bin(n−1,2p)andA∼Bin/parenleftbig
+C,1
+2/parenrightbig
+) and letτ >0. Consider the set
+Sn= [max (0,(2p−cn)(n−1)),min (n−1,(2p+cn)(n−1))],
+5Published in Transactions on Machine Learning Research (MM/YYYY)
+wherecn=/radicalBig
+log(4/τ)
+2(n−1)and the set
+Si= [max/parenleftbig
+0,(1
+2−ci)·i/parenrightbig
+,min/parenleftbig
+n−1,(1
+2+ci)·i/parenrightbig
+],
+whereci=/radicalBig
+log(4/τ)
+2·i. Then,/tildewideωP/Qdeﬁned by
+/tildewideωP/Q(s) =/summationdisplay
+i∈Sn/summationdisplay
+j∈SiP(P= (j+ 1,i−j))·δsj+1,i−j(s), sa,b= log/parenleftBig
+P(P=(a,b))
+P(Q=(a,b))/parenrightBig
+(3.5)
+hasO(n·log(4/τ))terms and diﬀers from ωP/Qat most by mass τ.
+Proof.AsAis conditioned on C, we ﬁrst use a tail bound on Cand then on Ato reduce the number of
+terms. Using Hoeﬀding’s inequality for C∼Bin(n−1,2p)states that for c>0,
+P/parenleftbig
+C≤(2p−c)(n−1)/parenrightbig
+≤exp/parenleftbig
+−2(n−1)c2/parenrightbig
+,
+P/parenleftbig
+C≥(2p+c)(n−1)/parenrightbig
+≤exp/parenleftbig
+−2(n−1)c2/parenrightbig
+.
+Requiring that 2·exp/parenleftbig
+−2(n−1)c2/parenrightbig
+≤τ/2gives the condition c≥/radicalBig
+log(4/τ)
+2(n−1)and the expressions for cn
+andSn. Similarly, we use Hoeﬀding’s inequality for A∼Bin(C,1
+2)and get expressions for ciandSi. The
+total neglected mass is at most τ/2 +τ/2 =τ. For the number of terms, we see that Sncontains at most
+2cn(n−1) =√n−1/radicalbig
+2·log(4/τ)terms and for each i, andSicontains at most 2cii=√
+i/radicalbig
+2·log(4/τ)≤√n−1/radicalbig
+2·log(4/τ)terms. Thus/tildewideωP/Qhas at mostO(n·log(4/τ))terms. We get the form of Equation 3.5
+by an appropriate change of variables.
+When evaluating /tildewideωP/Q, we require that the neglected mass is smaller than some prescribed tolerance τ(e.g.
+τ= 10−12). When computing guarantees for compositions, the cost of FFT for evaluating the convolutions
+dominates the rest of the computation.
+3.3 Experimental comparison to RDP
+Figure 1 shows a comparison between the PLD and RDP applied to the pair of distributions PandQgiven
+in Equation 3.1. RDP bounds for composition are computed using standard composition results (Mironov,
+2012) and the RDP bounds are converted to DP bounds using the conversion formula given by Canonne et al.
+(2020). Naive evaluation of RDP-values is O(n2)computation. We heuristically speed up RDP evaluation
+using the Hoeﬀding inequality (Lemma 11) and check that increasing the accuracy does not change the
+results.
+3.4 Experimental comparison to the subsampled RDP bounds of Girgis et al. (2021)
+Girgis et al. (2021) consider a protocol where a randomly sampled, ﬁxed sized subset of users sends
+contributions to the shuﬄer on each round, and the local randomisers are assumed to be integer-valued
+ε0-LDP mechanisms. This can be seen as a composition of a shuﬄer and a subsampling mechanism. We
+can generalise our analysis to this case via Lemma 7, and use Algorithm 1 of Doroshenko et al. (2022) on
+the function h(α)deﬁned in Equation 2.3 to obtain the dominating pair of distributions for the subsampled
+shuﬄer. To this end, we need to deﬁne a grid for α:{α0,...,αnα+1}, where 0 =α0< α 1< ... < α nα<
+αnα+1=∞. We consider a logarithmically equidistant grid between α1andαnα. Thus, in practice this
+means that we need to determine α1andαnαand the value nα. Figure 2 illustrates the convergence of
+the obtained approximation as we reﬁne the α-grid, for a subsampled shuﬄer, where the dominating pair of
+distributions PandQfor the non-subsampled shuﬄer are obtained from (Thm. 3.1 Feldman et al., 2023).
+As we see from Figure 3, this approach leads to considerably lower ε(δ)-bounds than the approach by Girgis
+et al. (2021). Notice that the tightness of the PLD-based bound is mostly determined by the analysis
+of Feldman et al. (2023) which gives the dominating pair (P,Q)of Equation 3.1 and that the RDP-based
+analysis of Girgis et al. (2021) is fundamentally diﬀerent.
+6Published in Transactions on Machine Learning Research (MM/YYYY)
+0.2 0.4 0.6 0.8 1.0
+ε10−1310−1110−910−710−510−310−1δRDP,nc= 4
+RDP,nc= 3
+RDP,nc= 2
+RDP,nc= 1
+PLD,nc= 4
+PLD,nc= 3
+PLD,nc= 2
+PLD,nc= 1
+Figure 1: Evaluation of δ(ε)for general single and composite shuﬄe ε0-LDP mechanisms using RDP
+accounting and FFT-based numerical accounting (PLD) applied to the pair of distributions PandQgiven
+by the post-processing result of Feldman et al. (2023). Number of users n= 104and the LDP parameter
+ε0= 4.0.
+0.2 0.4 0.6 0.8 1.0
+ε10−1110−910−710−510−310−1δ
+Doroshenko et al., nα= 500
+Doroshenko et al., nα= 3000
+Hα(q·P+ (1−q)·Q||Q)
+Figure 2: We apply FFT-based method on the dominating pair of distributions given by Algorithm 1
+of Doroshenko et al. (2022) applied on the function h(α)that we obtain from Lemma 7, for diﬀerent sizes
+ofα-grids. Here, the underlying PandQare obtained from the analysis of Feldman et al. (2023), and we
+setε0= 3.0,n= 104,nc= 2000, subsampling ratio q= 0.01,α1= exp(−0.25),αnα= exp(0.25), and take
+a logarithmically equidistant α-grid. We also plot Heε(q·P+ (1−q)·Q||Q)for comparison.
+7Published in Transactions on Machine Learning Research (MM/YYYY)
+101102103104
+Number of compositions nc10−210−1100101DPε
+ε0= 3.0,n= 105,q= 0.01,δ= 1/n
+εfrom RDP upper bound (Girgis et al., 2021)
+εfrom PLD + FFT accountant
+Figure 3: Evaluation of ε(δ)for compositions of subsampled shuﬄers of ε0-local randomisers. We compare
+the bounds obtained using the FFT-accounting and the PLD determined by the numerical method of
+(Doroshenko et al., 2022, Algorithm 1) applied to the dominating pair of Equation 3.1 and the RDP-bounds
+given in Thm. 2 of (Girgis et al., 2021) that are mapped to ε(δ)-bounds using Lemma 1 of (Girgis et al.,
+2021). Here the number of compositions ncvaries andnis ﬁxed. Here qdenotes the subsampling ratio.
+4 Shuﬄed k-randomised response
+Balle et al. (2019) give a protocol for nparties to compute a private histogram over the domain [k]in the
+single-message shuﬄe model. The randomiser is parameterised by a probability γ, and consists of a k-ary
+randomised response mechanism ( k-RR) that returns the true value with probability 1−γand a uniformly
+random value with probability γ. Denote this k-RR randomiser by RPH
+γ,k,nand the shuﬄing operation by S.
+Thus, we are studying the privacy of the shuﬄed randomiser M=S◦RPH
+γ,k,n.
+Consider ﬁrst the proof of Balle et al. (2019, Thm. 3.1). Assuming without loss of generality that the diﬀering
+data element between XandX/prime,X,X/prime∈[k]n, isxn, the (strong) adversary Asused by Balle et al. (2019,
+Thm. 3.1) is deﬁned as follows.
+Deﬁnition 12. LetM=S◦RPH
+γ,k,nbe the shuﬄed k-RR mechanism, and w.l.o.g. let the diﬀering element
+bexn. We deﬁne adversary Asas an adversary with the view
+ViewAs
+M(X) =/parenleftbig
+(x1,...,xn−1), β∈{0,1}n,(yπ(1),...,yπ(n))/parenrightbig
+,
+whereyare the outputs from the shuﬄer, βis a binary vector identifying which parties answered randomly,
+andπis a uniformly random permutation applied by the shuﬄer.
+Assuming w.l.o.g. that the diﬀering element xn= 1andx/prime
+n= 2, the proof then shows that for any possible
+viewVof the adversary As,
+P(ViewAs
+M(X) =V)
+P(ViewAs
+M(X/prime) =V)=N1+ 1
+N2, (4.1)
+whereNidenotes the number of messages received by the server with value iafter removing from the output
+Yany truthful answers submitted by the ﬁrst n−1users. The (ε,δ)-analysis of Balle et al. (2019) is based
+8Published in Transactions on Machine Learning Research (MM/YYYY)
+on showing that for all neighbouring XandX/prime,
+ViewAs
+M(X)/similarequal(ε,δ)ViewAs
+M(X/prime) (4.2)
+for
+δ(ε) =P/parenleftbiggN1+ 1
+N2≥eε/parenrightbigg
+, (4.3)
+where the randomness of (N1,N2)is determined by ViewAs
+M(X). Instead of being mutually independent
+binomially distributed random variables as argued in the proof of Balle et al. (2019, Thm. 3.1), we claim
+thatN1andN2are distributed as follows.
+Lemma 13. Let the ViewAs
+M(X)be deﬁned as in Def. 12. N1andN2denote the number of outcomes of
+the ﬁrstn−1local randomisers that are results of randomisation and equal 1 and 2, respectively. Then the
+countsN1andN2are distributed as
+(N1,N2)∼(A,C),
+whereA∼Bin(n−1,γ
+k)andC∼Bin(n−1−A,γ
+k−γ).
+Proof.First, more generally, consider n−1independent trials and random variables for the numbers of
+observations for three classes: N1,N2and a remainder class, with corresponding probabilities p1,p2and
+1−p1−p2. Then, the multinomial probability gives
+P/parenleftbig
+(N1,N2) = (n1,n2)/parenrightbig
+=(n−1)!
+n1!n2!(n−1−n1−n2)!pn1
+1pn2
+2(1−p1−p2)n−1−n1−n2
+=(n−1)!
+n1!(n−1−n1)!pn1
+1(1−p1)n−1−n1·(n−1−n1)!
+n2!(n−1−n1−n2)!pn2
+2(1−p1−p2)n−1−n1−n2
+(1−p1)n−1−n1
+=(n−1)!
+n1!(n−1−n1)!pn1
+1(1−p1)n−1−n1·(n−1−n1)!
+n2!(n−1−n1−n2)!/parenleftbiggp2
+1−p1/parenrightbiggn2/parenleftbigg1−p1−p2
+1−p1/parenrightbiggn−1−n1−n2
+=n!
+n1!(n−1−n1)!pn1
+1(1−p1)n−1−n1·/bracketleftBigg
+(n−1−n1)!
+n2!(n−1−n1−n2)!/parenleftbiggp2
+1−p1/parenrightbiggn2/parenleftbigg
+1−p2
+1−p1/parenrightbiggn−1−n1−n2/bracketrightBigg
+.
+We recognise the probabilities of binomial distributions, and see that
+(N1,N2)∼(A,C),
+whereA∼Bin(n−1,p1)andC∼Bin(n−1−A,p2
+1−p1). WhenV∼ViewAs
+M(X), we can think of N1andN2
+as numbers of outcomes of n−1independent trials where both classes have probabilities γ/k. Substituting
+p1=p2=γ/kin the above formula shows the claim.
+Using the reasoning of Balle et al. (2019, Thm. 3.1) (Equation 4.1), we can explicitly write the PLD which
+gives us tight (ε,δ)-bounds. Recall from Def. 5 that the privacy loss random variable for ViewAs
+Mis given by
+ωAs
+X/X/prime= log/parenleftBigg
+P(ViewAs
+M(X) =V)
+P(ViewAs
+M(X/prime) =V)/parenrightBigg
+, V∼ViewAs
+M(X). (4.4)
+Using this deﬁnition of PRV, Equation 4.1 and Lemma 13, we get the following.
+Theorem 14. Consider the adversary Asas given in Def 12. For all neighbouring datasets XandX/prime, the
+PRV for ViewAs
+Mis given by
+ωAs= log/parenleftbiggN1+ 1
+N2/parenrightbigg
+,
+where
+(N1,N2)∼(A,C),
+andA∼Bin(n−1,γ
+k)andC∼Bin(n−1−A,γ
+k−γ).
+9Published in Transactions on Machine Learning Research (MM/YYYY)
+Notice that this expression for ωAsis independent of any input to the local randomisers and holds for any
+neighbouring datasets XandX/prime. Therefore it allows computing tight δ(ε)-bounds for adaptive compositions
+of thek-RR shuﬄer in case we assume the adversary of Def. 12.
+4.1 Tight bounds for weaker adversaries
+Following the reasoning used for analysing the bounds against the adversary Asof Def. 12, we can compute
+tightδ(ε)-bounds also for an adversary that has less information about the local randomisers. Having tight
+bounds also enables us to evaluate exactly how much diﬀerent assumptions on the adversary cost us in terms
+of privacy. Instead of the adversary Aswe analyse a weaker adversary Aw, who has extra information only
+on the ﬁrst n−1parties. We formalise this as follows.
+Deﬁnition 15. LetM=S◦RPH
+γ,k,nbe the shuﬄed k-RR mechanism, and w.l.o.g. let the diﬀering element
+bexn. Adversary Awis an adversary with the view
+ViewAw
+M(X) =/parenleftbig
+(x1,...,xn−1), β∈{0,1}n−1,(yπ(1),...,yπ(n))/parenrightbig
+,
+whereyare the outputs from the shuﬄer, βis a binary vector identifying which of the ﬁrst n−1parties
+answered randomly, and πis a uniformly random permutation applied by the shuﬄer.
+Note that compared to the stronger adversary Asformalised in Def. 12, the diﬀerence is only in the vector
+β. We write b=/summationtext
+iβi, andBfor the corresponding random variable in the following. The next theorem
+gives the random variables we need to calculate privacy bounds for adversary Aw.
+Theorem 16. Consider the adversary Awas given in Def 15. For all neighbouring datasets XandX/prime, the
+PRV for ViewAw
+Mis given by
+ωAw= log/parenleftbiggPw
+Qw/parenrightbigg
+,
+where
+Pw=P1+P2, Qw=Q1+Q2, (4.5)
+and
+P1∼(1−γ)·N1|B, P 2∼γ
+k·(B+ 1),
+Q1∼(1−γ)·N2|N1,B, Q 2∼γ
+k·(B+ 1),
+B∼Bin(n−1,γ),
+NB
+1|B∼Bin/parenleftbigg
+B,1
+k/parenrightbigg
+,
+N1|B∼NB
+1|B+Rn,
+Rn∼Bern(1−γ+γ/k),
+N2|N1,B∼Bin/parenleftbigg
+B+ 1−N1|B,1
+k−1/parenrightbigg
+.
+As a direct corollary to this result, and analogously to the case of the adversary As, since the PLD ωAwis
+independent of any input to the local randomisers, we obtain tight δ(ε)-bounds against the adversary Aw
+for adaptive compositions using ωAw.
+4.2 Experimental comparison between specialized analysis of k-RR (Balle et al., 2019) and
+specialized Clones - analysis (Feldman et al., 2023)
+In Figure 4 we compare the tight bounds obtained using the PRVs ωAsandωAwwith numerical FFT-
+based accounting, and the PLD obtained from the k-RR speciﬁc analysis of Feldman et al. (2023, Thm 5.2)
+combined with numerical accounting. We tune the parameters of the FFT-based numerical accounting so
+that the discretisation error is negligible. Notice that the underlying analysis of k-RR with the adversaries
+10Published in Transactions on Machine Learning Research (MM/YYYY)
+As,Awhas stronger assumptions about the adversary than the analysis by Feldman et al. (2023), as the
+adversaries know which of the messages were randomised (except for the diﬀering element in case of the
+weaker adversary Aw). For the weaker adversary Aw, we already obtain stronger guarantees than by using
+the analysis of Feldman et al. (2023).
+10−710−610−510−4
+δ012345εFeldman et al. (2023, Thm. 5.1), nc= 16
+Feldman et al. (2023, Thm. 5.1), nc= 4
+Feldman et al. (2023, Thm. 5.1), nc= 1
+AdversaryAs,nc= 16
+AdversaryAs,nc= 4
+AdversaryAs,nc= 1
+AdversaryAw,nc= 16
+AdversaryAw,nc= 4
+AdversaryAw,nc= 1
+Figure 4:k-RR with the strong adversary As(PRVωAsdetermined by Thm 14) and the weak adversary
+(PRVωAsdetermined by Thm 16) and tight (ε,δ)-DP bounds obtained using FFT-accounting for diﬀerent
+numbers of compositions nc. Heren= 1000, probability of randomising γ= 0.25, andk= 4. Also shown
+are the bounds computed using the k-RR speciﬁc result by Feldman et al. (2023, Thm 5.2).
+5 On the diﬃculty of obtaining bounds in the general case
+We have provided means to compute accurate (ε,δ)-bounds for the general ε0-LDP shuﬄer using the results
+by Feldman et al. (2023) and tight bounds for the case of k-randomised response. Using the following
+example, we illustrate the computational diﬃculty of obtaining tight bounds for arbitrary local randomisers.
+Consider neighbouring datasets X,X/prime∈Rn, where all elements of Xare equal, and X/primecontains one element
+diﬀering by 1. Without loss of generality (due to shifting and scaling invariance of DP), we may consider the
+case where Xconsists of zeros and X/primehas 1 at some element. Considering a mechanism Mthat consists of
+adding Gaussian noise with variance σ2to each element and then shuﬄing, we see that the adversary sees
+the output ofM(X)distributed asM(X)∼N(0,σ2In),and the outputM(X/prime)as the mixture distribution
+M(X/prime)∼1
+n·N(e1,σ2In) +...+1
+n·N(en,σ2In),whereeidenotes the ith unit vector.
+Determining the hockey-stick divergence Heε(M(X/prime)||M(X))cannot be projected to a lower-dimensional
+problem, unlike in the case of the (subsampled) Gaussian mechanism, for example, which is equivalent to a
+one-dimensional problem. This means that in order to obtain tight (ε,δ)-bounds, we need to numerically
+evaluate the n-dimensional hockey-stick integral Heε(M(X/prime)||M(X)).
+Using a numerical grid as in FFT-based accountants is unthinkable due to the curse of the dimensionality.
+However, we may use the fact that for any dataset X, the density function fX(t)ofM(X)is a permutation-
+invariant function, meaning that for any t∈Rnand for any permutation σ∈πn,fX/parenleftbig
+σ(t)/parenrightbig
+=fX(t). This
+allows reducing the number of required points on a regular grid for the hockey stick integral from O(mn)to
+O(mn/n!), wheremis the number of discretisation points in each dimension. Recent research on numerical
+11Published in Transactions on Machine Learning Research (MM/YYYY)
+integration of permutation-invariant functions (e.g. Nuyens et al., 2016) suggests it may be possible to
+signiﬁcantly reduce or even eliminate the dependence on nusing more advanced integration techniques.
+In the Appendix C.2, we give results on experiments where we have computed Heε(M(X/prime)||M(X))using
+Monte Carlo integration on a hypercube [−L,L]nwhich requires≈5·107samples for getting two correct
+signiﬁcant ﬁgures already for n= 7.
+6 Discussion
+We have shown how numerical privacy accounting with privacy loss distributions can be used to calculate
+accurate upper bounds for the compositions of various (ε,δ)-DP mechanisms, as well as for diﬀerent
+adversariesintheshuﬄemodel. AnalternativeaccountingapproachusesRényidiﬀerentialprivacy(Mironov,
+2017). We have carried out experimental comparisons between the RDP and the PLD approaches. As
+illustrated by the comparison against the results of Girgis et al. (2021) in Fig. 3, numerical PLD accounting
+can sometimes lead to considerably tighter bounds.
+When comparing numerical and analytical privacy bounds, they are in many cases complementary and serve
+diﬀerent purposes. Numerical accountants allow ﬁnding the tightest possible bounds for implementations
+and enable more unbiased comparison of algorithms when accuracy of accounting is not a factor. Analytical
+bounds enable theoretical research and understanding of scaling properties of algorithms, but the inaccuracy
+of the bounds raises the risk of misleading conclusions about privacy claims.
+While our results provide improvements over previous state-of-the-art, they only provide optimal accounting
+fork-randomised response. Developing optimal accounting for more general mechanisms as well as extending
+the results to (ε0,δ0)-LDP base mechanisms are important topics for future research.
+Acknowledgments
+This work was supported by the Academy of Finland (Flagship programme: Finnish Center for Artiﬁcial
+Intelligence, FCAI; and grant 325573), the Strategic Research Council at the Academy of Finland (Grant
+336032) as well as the European Union (Project 101070617). Views and opinions expressed are however
+those of the author(s) only and do not necessarily reﬂect those of the European Union or the European
+Commission. Neither the European Union nor the granting authority can be held responsible for them.
+The authors would also like to thank the anonymous reviewers and the action editor at TMLR for noticing
+potential points of confusion in an earlier version, as well as for the helpful discussions.
+References
+Borja Balle, James Bell, Adrià Gascón, and Kobbi Nissim. The privacy blanket of the shuﬄe model. In
+Annual International Cryptology Conference , pp. 638–667. Springer, 2019.
+Borja Balle, Gilles Barthe, and Marco Gaboardi. Privacy proﬁles and ampliﬁcation by subsampling. Journal
+of Privacy and Conﬁdentiality , 10(1), 2020a.
+Borja Balle, James Bell, Adria Gascón, and Kobbi Nissim. Private summation in the multi-message shuﬄe
+model. In Proceedings of the 2020 ACM SIGSAC Conference on Computer and Communications Security ,
+pp. 657–676, 2020b.
+Andrea Bittau, Úlfar Erlingsson, Petros Maniatis, Ilya Mironov, Ananth Raghunathan, David Lie, Mitch
+Rudominer, Ushasree Kode, Julien Tinnes, and Bernhard Seefeld. Prochlo: Strong privacy for analytics
+in the crowd. In Proceedings of the 26th Symposium on Operating Systems Principles , pp. 441–459, 2017.
+Clément L Canonne, Gautam Kamath, and Thomas Steinke. The discrete gaussian for diﬀerential privacy.
+Advances in Neural Information Processing Systems , 33:15676–15688, 2020.
+12Published in Transactions on Machine Learning Research (MM/YYYY)
+Albert Cheu, Adam Smith, Jonathan Ullman, David Zeber, and Maxim Zhilyaev. Distributed diﬀerential
+privacy via shuﬄing. In Annual International Conference on the Theory and Applications of Cryptographic
+Techniques , pp. 375–403. Springer, 2019.
+Vadym Doroshenko, Badih Ghazi, Pritish Kamath, Ravi Kumar, and Pasin Manurangsi. Connect the
+dots: Tighter discrete approximations of privacy loss distributions. Proceedings on Privacy Enhancing
+Technologies , 4:552–570, 2022.
+Cynthia Dwork, Frank McSherry, Kobbi Nissim, and Adam Smith. Calibrating noise to sensitivity in private
+data analysis. In Theory of Cryptography: Third Theory of Cryptography Conference, TCC 2006, New
+York, NY, USA, March 4-7, 2006. Proceedings 3 , pp. 265–284. Springer, 2006.
+Úlfar Erlingsson, Vitaly Feldman, Ilya Mironov, Ananth Raghunathan, Kunal Talwar, and Abhradeep
+Thakurta. Ampliﬁcation by shuﬄing: From local to central diﬀerential privacy via anonymity. In
+Proceedings of the Thirtieth Annual ACM-SIAM Symposium on Discrete Algorithms ,pp.2468–2479.SIAM,
+2019.
+Vitaly Feldman, Audra McMillan, and Kunal Talwar. Hiding among the clones: A simple and nearly optimal
+analysis of privacy ampliﬁcation by shuﬄing. In 2021 IEEE 62nd Annual Symposium on Foundations of
+Computer Science . IEEE, 2021.
+Vitaly Feldman, Audra McMillan, and Kunal Talwar. Stronger privacy ampliﬁcation by shuﬄing for Rényi
+and approximate diﬀerential privacy. In Proceedings of the 2023 Annual ACM-SIAM Symposium on
+Discrete Algorithms (SODA) , pp. 4966–4981. SIAM, 2023.
+Badih Ghazi, Noah Golowich, Ravi Kumar, Rasmus Pagh, and Ameya Velingker. On the power of multiple
+anonymous messages: Frequency estimation and selection in the shuﬄe model of diﬀerential privacy. In
+Anne Canteaut and François-Xavier Standaert (eds.), Advances in Cryptology – EUROCRYPT 2021 , pp.
+463–488, Cham, 2021. Springer International Publishing. ISBN 978-3-030-77883-5.
+Antonious Girgis, Deepesh Data, and Suhas Diggavi. R ényi diﬀerential privacy of the subsampled shuﬄe
+model in distributed learning. Advances in Neural Information Processing Systems , 34, 2021.
+Sivakanth Gopi, Yin Tat Lee, and Lukas Wutschitz. Numerical composition of diﬀerential privacy. In
+Advances in Neural Information Processing Systems , 2021.
+Shiva Prasad Kasiviswanathan, Homin K Lee, Kobbi Nissim, Sofya Raskhodnikova, and Adam Smith. What
+can we learn privately? SIAM Journal on Computing , 40(3):793–826, 2011.
+Antti Koskela, Joonas Jälkö, and Antti Honkela. Computing tight diﬀerential privacy guarantees using FFT.
+InInternational Conference on Artiﬁcial Intelligence and Statistics , pp. 2560–2569. PMLR, 2020.
+Antti Koskela, Joonas Jälkö, Lukas Prediger, and Antti Honkela. Tight diﬀerential privacy for discrete-
+valued mechanisms and for the subsampled gaussian mechanism using FFT. In International Conference
+on Artiﬁcial Intelligence and Statistics , pp. 3358–3366. PMLR, 2021.
+Ilya Mironov. On signiﬁcance of the least signiﬁcant bits for diﬀerential privacy. In Proceedings of the 2012
+ACM conference on Computer and communications security , pp. 650–661, 2012.
+Ilya Mironov. Rényi diﬀerential privacy. In 2017 IEEE 30th Computer Security Foundations Symposium
+(CSF), pp. 263–275, Aug 2017. doi: 10.1109/CSF.2017.11.
+Dirk Nuyens, Gowri Suryanarayana, and Markus Weimar. Rank-1 lattice rules for multivariate integration
+in spaces of permutation-invariant functions: Error bounds and tractability. Advances in Computational
+Mathematics , 42:55–84, 2016.
+David M Sommer, Sebastian Meiser, and Esfandiar Mohammadi. Privacy loss classes: The central limit
+theorem in diﬀerential privacy. Proceedings on Privacy Enhancing Technologies , 2019(2):245–269, 2019.
+Yuqing Zhu, Jinshuo Dong, and Yu-Xiang Wang. Optimal accounting of diﬀerential privacy via characteristic
+function. In International Conference on Artiﬁcial Intelligence and Statistics , pp. 4782–4817.PMLR, 2022.
+13Published in Transactions on Machine Learning Research (MM/YYYY)
+A Auxiliary results for determining the PLD of general ε0shuﬄers
+We recall the following from Section 3.1. Denoting q= eε0pand/tildewideq=p
+1−eε0p,p=1
+eε0+1, the dominating pair
+of distributions (P,Q)is determined are given by the mixtures
+P=q·P0+ (1−q)/tildewideq·P1+ (1−q)(1−/tildewideq)·P2, Q = (1−q)/tildewideq·P0+q·P1+ (1−q)(1−/tildewideq)·P2,
+where
+P0∼(A+ 1,C−A), P 1∼(A,C−A+ 1), P 2= (A,C−A)
+and forn∈N,AandCare as
+C∼Bin(n−1,2p), A∼Bin/parenleftbig
+C,1
+2/parenrightbig
+,∆1∼Bern (eε0p)and ∆2∼Bin/parenleftBig
+1−∆1,p
+1−eε0p/parenrightBig
+.
+In this section we give the expressions needed to determine the PLD
+ωP/Q(s) =/summationdisplay
+a,bP(P= (a,b))·δsa,b(s), sa,b= log/parenleftbiggP(P= (a,b))
+P(Q= (a,b))/parenrightbigg
+, (A.1)
+and similarly also ωQ/P.
+A.1 Determining the log ratios sa,b
+To determine sa,b’s, we need the following auxiliary results.
+Lemma A.1. Whenb>0anda>0, we have:
+P(P0= (a,b)) =a
+b·P(P1= (a,b)).
+Proof.We see that P0= (a,b)if and only if A=a−1andC=a+b−1. Since
+P(A=a−1|C=a+b−1) =/parenleftbigga+b−1
+a−1/parenrightbigg1
+2a+b−1
+=a
+b·/parenleftbigga+b−1
+a/parenrightbigg1
+2a+b−1
+=a
+b·P(A=a|C=a+b−1),
+we see that
+P(P0= (a,b)) =P(C=a+b−1)·P(A=a−1|C=a+b−1)
+=P(C=a+b−1)·a
+b·P(A=a|C=a+b−1)
+=a
+b·P(P1= (a,b)),
+sinceP1= (a,b)if and only if A=aandC=a+b−1.
+Lemma A.2. Whenb>0anda>0, we have:
+P(P0= (a,b)) =(1−2p)a
+(n−a−b)p·P(P2= (a,b)).
+Proof.We see that P2= (a,b)if and only if A=aandC=a+b. Since
+P(C=a+b) =/parenleftbiggn−1
+a+b/parenrightbigg
+(2p)a+b(1−2p)n−1−a−b
+=2p
+1−2p/parenleftbiggn−1
+a+b/parenrightbigg
+(2p)a+b−1(1−2p)n−1−a−b+1
+=2p
+1−2pn−a−b
+a+b/parenleftbiggn−1
+a+b−1/parenrightbigg
+(2p)a+b−1(1−2p)n−1−a−b+1
+=2p
+1−2pn−a−b
+a+b·P(C=a+b−1)
+14Published in Transactions on Machine Learning Research (MM/YYYY)
+and since
+P(A=a|C=a+b−1) =/parenleftbigga+b−1
+a/parenrightbigg1
+2a+b−1=2b
+a+b/parenleftbigga+b
+a/parenrightbigg1
+2a+b=2b
+a+b·P(A=a|C=a+b),
+we see that
+P(P0= (a,b)) =P(C=a+b−1)·P(A=a−1|C=a+b−1)
+=P(C=a+b−1)·a
+b·P(A=a|C=a+b−1)
+=(1−2p)a
+(n−a−b)p·P(C=a+b)·a
+b·P(A=a|C=a+b)
+=(1−2p)a
+(n−a−b)p·P(P2= (a,b)).
+As a corollary of Lemmas A.1 and A.2 we get the following expressions with which we can also determine
+the log ratios sa,b.
+Corollary A.3. We have:
+P/parenleftbig
+P= (a,b)/parenrightbig
+=/bracketleftbigg
+q+ (1−q)/tildewideq·b
+a+ (1−q)(1−/tildewideq)(n−a−b)p
+(1−2p)a/bracketrightbigg
+·P/parenleftbig
+P0= (a,b)/parenrightbig
+and
+P/parenleftbig
+Q= (a,b)/parenrightbig
+=/bracketleftbigg
+q·b
+a+ (1−q)/tildewideq+ (1−q)(1−/tildewideq)(n−a−b)p
+(1−2p)a/bracketrightbigg
+·P/parenleftbig
+P0= (a,b)/parenrightbig
+.
+Probabilities for the cases a= 0andb= 0become extremely small already for moderate values of n. When
+using the Hoeﬀding inequality based O(n)-approximation to determine the PLDs, we do not need to evaluate
+these probabilities so we do not consider writing them out.
+Corollary A.3 gives P/parenleftbig
+P= (a,b)/parenrightbig
+andP/parenleftbig
+Q= (a,b)/parenrightbig
+in terms of P(P0= (a,b)), and that is given by the
+following expression which we get by change of variables.
+Lemma A.4. Whena>0,
+P(P0= (a,b)) =/parenleftbiggn−1
+i/parenrightbigg/parenleftbiggi
+j/parenrightbigg
+pi(1−p)n−1−i1
+2i,
+where (a,b) = (j+ 1,i−j)(i.e.,C=iandA=j).
+B More detailed proof of the Lemma: Lowering PLD computational complexity
+using Hoeﬀding’s inequality
+Using an appropriate tail bound (Hoeﬀding) for the binomial distribution, we can truncate part of the
+probability mass and add it directly to δ. More speciﬁcally, if each PLD ωi,1≤i≤nc, in annc-composition
+is approximated by a truncated distribution /tildewideωisuch that the truncated probability masses are τi≥0,
+respectively, then
+δ(ε) =/tildewideδ(ε) +δ(∞),
+where/tildewideδ(ε)is the value of the hockey-stick divergence obtained with the truncated PLDs /tildewideωi,1≤i≤nc, and
+where
+δ(∞) = 1−/productdisplay
+i(1−τi)≤/summationdisplay
+iτi,
+gives an upper bound for the composition without truncations, see e.g. Thm 1 in Sommer et al. (2019).
+Using the Hoeﬀding inequality we obtain an accurate approximation of ωP/Q(orωQ/P) with onlyO(n)
+terms. We formalise this approximation as follows.
+15Published in Transactions on Machine Learning Research (MM/YYYY)
+Lemma 11. Letτ >0. Consider the set
+Sn= [max (0,(2p−cn)(n−1)),min (n−1,(2p+cn)(n−1))],
+wherecn=/radicalBig
+log(4/τ)
+2(n−1)and the set
+Si= [max/parenleftbig
+0,(1
+2−ci)·i/parenrightbig
+,min/parenleftbig
+n−1,(1
+2+ci)·i/parenrightbig
+],
+whereci=/radicalBig
+log(4/τ)
+2·i. Then, the distribution /tildewideωP/Qdeﬁned by
+/tildewideωP/Q(s) =/summationdisplay
+i∈Sn/summationdisplay
+j∈SiP(P= (j+ 1,i−j))·δsj+1,i−j(s), sa,b= log/parenleftBig
+P(P=(a,b))
+P(Q=(a,b))/parenrightBig
+(B.1)
+hasO(n·log(4/τ))terms and diﬀers from ωP/Qat most mass τ.
+Proof.Using Hoeﬀding’s inequality for C∼Bin(n−1,2p)states that for c>0,
+P/parenleftbig
+C≤(2p−c)(n−1)/parenrightbig
+≤exp/parenleftbig
+−2(n−1)c2/parenrightbig
+,
+P/parenleftbig
+C≥(2p+c)(n−1)/parenrightbig
+≤exp/parenleftbig
+−2(n−1)c2/parenrightbig
+.
+Requiring that 2·exp/parenleftbig
+−2(n−1)c2/parenrightbig
+≤τ/2gives the condition c≥/radicalBig
+log(4/τ)
+2(n−1)and the expressions for cn
+andSn. Similarly, we use Hoeﬀding’s inequality for A∼Bin(C,1
+2)and get expressions for ciandSi. The
+total neglegted mass is at most τ/2 +τ/2 =τ. For the number of terms, we see that Sncontains at most
+2cn(n−1) =√n−1/radicalbig
+2·log(4/τ)terms and for each i,Sicontains at most 2cii=√
+i/radicalbig
+2·log(4/τ)≤√n−1/radicalbig
+2·log(4/τ)terms. Thus /tildewideωP/Qhas at mostO(n·log(4/τ))terms. We get the expression of
+Equation B.1 by the change of variables a=i+ 1(A=i) andb=i−j(C=j).
+C Auxiliary results for Section 4
+C.1 Proof of Theorem 16
+Theorem C.1. Consider the adversary Awas given in Def 15. For all neighbouring datasets XandX/prime,
+the PRV for ViewAw
+Mis given by
+ωAw= log/parenleftbiggPw
+Qw/parenrightbigg
+,
+where
+Pw=P1+P2, Qw=Q1+Q2, (C.1)
+and
+P1∼(1−γ)·N1|B, P 2∼γ
+k·(B+ 1),
+Q1∼(1−γ)·N2|N1,B, Q 2∼γ
+k·(B+ 1),
+B∼Bin(n−1,γ),
+NB
+1|B∼Bin/parenleftbigg
+B,1
+k/parenrightbigg
+,
+N1|B∼NB
+1|B+Rn,
+Rn∼Bern(1−γ+γ/k),
+N2|N1,B∼Bin/parenleftbigg
+B+ 1−N1|B,1
+k−1/parenrightbigg
+.
+16Published in Transactions on Machine Learning Research (MM/YYYY)
+Proof.Assume w.l.o.g. that the diﬀering elements are xn= 1,x/prime
+n= 2. Notice that for k-RR, seeing the
+shuﬄer output is equivalent to seeing the total counts for each class resulting from applying the local
+randomisers to XorX/prime. The adversary Awcan remove all truthfully reported values by client j,j∈[n−1].
+Denote the observed counts after this removal by ni,i= 1,...,k, so/summationtextk
+i=1ni=b+ 1.
+We now have
+P(ViewAw
+M(x) =V) =k/summationdisplay
+i=1P(N1=n1,...,Ni=ni−1,Ni+1=ni+1,...Nk=nk|B)·P(R(xn) =i)·P(B=b)
+=/parenleftbiggb
+n1−1,n2,...,nk/parenrightbigg/parenleftbigg1
+k/parenrightbiggb
+·/parenleftBig
+1−γ+γ
+k/parenrightBig
+·γb(1−γ)n−1−b
++k/summationdisplay
+i=2/parenleftbiggb
+n1,...,ni−1,ni+1,...,nk/parenrightbigg/parenleftbigg1
+k/parenrightbiggb
+·γ
+k·γb(1−γ)n−1−b
+=/parenleftbiggb
+n1,n2,...,nk/parenrightbiggγb(1−γ)n−1−b
+kb/bracketleftBigg
+n1(1−γ+γ
+k) +k/summationdisplay
+i=2niγ
+k/bracketrightBigg
+=/parenleftbiggb
+n1,n2,...,nk/parenrightbiggγb(1−γ)n−1−b
+kb/bracketleftBig
+n1(1−γ+γ
+k) + (b+ 1−n1)γ
+k/bracketrightBig
+=/parenleftbiggb
+n1,n2,...,nk/parenrightbiggγb(1−γ)n−1−b
+kb/bracketleftBig
+n1(1−γ) +γ
+k(b+ 1)/bracketrightBig
+.
+(C.2)
+Noting then that P(RPH
+γ,k,n(x/prime
+n) =i) = (1−γ+γ
+k)wheni= 2andγ
+kotherwise, repeating essentially the
+same steps gives
+P(ViewAw
+M(X/prime) =V) =/parenleftbiggb
+n1,n2,...,nk/parenrightbiggγb(1−γ)n−1−b
+kb/bracketleftBig
+n2(1−γ) +γ
+k(b+ 1)/bracketrightBig
+. (C.3)
+Looking at the ratio of the two ﬁnal probabilities given in Equation C.2 and in Equation C.3, we get
+P(ViewAw
+M(X) =V)
+P(ViewAw
+M(X/prime) =V)=N1|B·(1−γ) +γ
+k(B+ 1)
+N2|N1,B·(1−γ) +γ
+k(B+ 1),
+where we write, e.g., N1|Bfor the random variables N1conditional on B. This shows that for DP bounds,
+the adversaries’ full view is equivalent to only considering the joint distribution of (N1,N2,B), and we can
+therefore look at the neighbouring random variables
+Pw=P1+P2, Qw=Q1+Q2, (C.4)
+where
+P1∼(1−γ)·N1|B, P 2∼γ
+k·(B+ 1),
+Q1∼(1−γ)·N2|N1,B, Q 2∼γ
+k·(B+ 1).
+WritingNB
+i,i= 1,2, for the count in class iresulting from the noise sent by the n−1parties, and denoting
+byRna Bernoulli random variable s.t. Rn= 1, ifR(xn) = 1, similarly to the proof in case of the strong
+adversary, we have
+B∼Bin(n−1,γ), NB
+1|B∼Bin/parenleftbigg
+B,1
+k/parenrightbigg
+,Rn∼Bern(1−γ+γ/k). (C.5)
+AsV∼ViewAw
+M(X), and
+N2|N1,Rn,B∼/braceleftBigg
+Bin(B+ 1−N1|B,1
+k−1),ifRn= 1,
+Bin(B−N1|B,1
+k−1) + Bern(1
+k−1),ifRn= 0,
+17Published in Transactions on Machine Learning Research (MM/YYYY)
+we ﬁnally have
+N1|B=NB
+1|B+Rn, N 2|N1,B= Bin(B+ 1−N1|B,1
+k−1). (C.6)
+The distributions of Equation C.5 and Equation C.6 determine the neighbouring distributions PwandQw
+that are given in Equation C.4. This completes the proof.
+C.2 Experiment for Section 5
+Consider neighbouring datasets X,X/prime∈Rn, where all elements of Xare equal, and X/primecontains one element
+diﬀering by 1. Without loss of generality (due to shifting and scaling invariance of DP), we may consider the
+case where Xconsists of zeros and X/primehas 1 at some element. Considering a mechanism Mthat consists of
+adding Gaussian noise with variance σ2to each element and then shuﬄing, we see that the adversary sees
+the output ofM(X)distributed asM(X)∼N(0,σ2In),and the outputM(X/prime)as the mixture distribution
+M(X/prime)∼1
+n·N(e1,σ2In)+...+1
+n·N(en,σ2In),whereeidenotes the ith unit vector. In order to obtain tight
+(ε,δ)-bounds, we need to numerically evaluate the n-dimensional hockey-stick integral Heε(M(X/prime)||M(X)).
+In Figure 5 we have computed Heε(M(X/prime)||M(X))up ton= 7using Monte Carlo integration on a
+hypercube [−L,L]nwhich requires≈5·107samples for getting two correct signiﬁcant ﬁgures for n= 7.
+0.5 1.0 1.5 2.0
+ε10−1310−1110−910−710−510−310−1δ
+n=2
+n=4
+n=6
+n=7
+Figure 5: Approximation of tight δ(ε)for shuﬄed outputs of Gaussian mechanisms ( σ= 2.0) by Monte Carlo
+integration of the hockey-stick divergence Heε(M(X/prime)||M(X)), using 5·107samples (two correct signiﬁcant
+ﬁgures).
+18

@@ -1,0 +1,262 @@
+Under review as submission to TMLR
+A mathematical model for estimating anti-learning when a
+decision tree solves the parity bit problem
+Anonymous authors
+Paper under double-blind review
+Abstract
+On some data, machine learning displays anti-learning; this means, in the most surprising
+scenario, that the more examples you place in the training set, the worse the accuracy
+becomes, until it becomes 0%on the test set. We produce a framework in which this kind of
+anti-learning can be reproduced and studied theoretically. We deduce a formula estimating
+anti-learning when decision trees (one of the most important tools of machine learning) solve
+the parity bit problem (one of the most famously tricky problems of machine learning). Our
+estimation formula (deduced under certain mathematical assumptions) agrees very well with
+experimental results (produced on random data without these assumptions).
+1 Anti-learning, the parity bit problem, and decision trees
+Letfbe a function. For the purposes of this study, one can assume that the domain domfis finite, and the
+image imf={0,1}. Split domfinto two sets, domf=R∪S,R∩S=∅.Machine learning can be described
+as the art of using algorithms to predict the values of fonSwhen the values of fonRare given. In this
+context,Ris called the training set , andSis called the test set. The percentage of the correct predictions of
+the values of fonSis calledaccuracy. A random predictor has accuracy 50%. The assumption of machine
+learning is that after inspecting the values of fonR, one can achieve a more than 50%accuracy. In some
+examples, researchers observed anti-learning Kowalczyk & Chapelle (2005); Kowalczyk (2007); Roadknight
+et al. (2018), that is, after learning on the values of fonR, accuracy becomes less than 50%.
+It can be useful to say that anti-learning should not be confused with overfitting , which is an important
+but different phenomenon in machine learning. Overfitting can be briefly described as accuracy decreasing
+towards 50%, whereas anti-learning means that accuracy paradoxically decreases below 50%.
+As we started exploring anti-learning, one phenomenon that attracted our attention was that in some sce-
+narios, as we vary the size |R|from slightly more than 0to slightly less than |domf|, accuracy monotically
+decreases from 50%to0%. For example, Figure 1 shows how accuracy (shown on the vertical axis) changes
+when we use random forests to predict the parity of a permutation (that is, to predict if a given permutation
+is odd or even) and vary the size |R|(shown on the horizontal axis as the percentage of the size |domf|).
+This paper is our attempt to explain the monotonically decreasing shape of the curve.
+To study anti-learning using mathematics, we concentrate on a combination of the parity bit problem and
+decision trees. Denote the two-element field GF(2)byF, and fix a positive integer n. Theparity bit of
+a vector (x1,...,x n)∈Fnis the sum x1+···+xn, with the addition performed in F. The parity bit is
+used in many applications; in the context of machine learning, it is an example of a famously hard problem,
+see Examples 1, 2 below. Exploring what it takes to successfully solve the parity bit problem always leads
+to fruitful research discussions in machine learning; examples stretch from the 1960s discussion of what
+perceptrons can calculate the parity bit Minsky & Papert (1969) to the very recent discovery that bees seem
+to be able to learn parity Howard et al. (2022).
+Example 1. Letn= 2, and letR={(0,0)(1,1)}andS={(0,1)(0,1)}. The parity bit of every vector
+in the training set Ris0, therefore, one predicts that the parity bit of every vector is 0. If we test this
+prediction on the test set S, it is wrong on all vectors of S; indeed, the parity bit of every vector in Sis1.
+Thus, accuracy is 0%.
+1Under review as submission to TMLR
+0 20 40 60 8001020304050
+Figure 1: Accuracy when random forests predict permutation parity
+Example 2. Letn= 2, and letR={(0,0)(0,1)}andS={(1,0)(1,1)}. The parity bit of every vector
+(x1,x2)in the training set Rcoincides with x2, therefore, one predicts that the parity bit of every vector is
+x2. If we test this prediction on the test set S, it is wrong on all vectors of S; indeed, the parity bit of every
+vector inSis notx2. Thus, accuracy is 0%.
+x1
+x1=0? x1=1?
+x2
+x2=0? x2=1?x2
+x2=0? x2=1?
+0 1 0 1
+Figure 2: A decision tree calculating the parity bit of (x1,x2)
+Constructions used in Examples 1, 2 are rudimentary examples of a model called a decision tree . Figure 2
+shows a decision tree calculating the parity bit of (x1,x2). The nodes in the tree which are not leaves instruct
+us to inspect the value of one position in the vector, and the leaves contain a prediction. Note that this tree
+is intentionally constructed to calculate the parity bit correctly for every vector (x1,x2); unlike Examples 1,
+2 this tree is not produced by training on a subset R⊂F2. This tree is balanced, that is, all paths from the
+root to a leaf have the same length. By a leaf setwe will mean the set of vectors defined by the conditions
+written along one path from the root to a leaf; for example, the rightmost path in the tree defines a leaf
+set described by equalities x1= 1,x2= 1; in this example, the leaf set consists of one vector {(1,1)}. By
+thesupportof a leaf set we mean the positions in the vector which feature in the equalities defining the leaf
+set; for example, in this tree all leaf sets have the same support x1,x2. Thesizeof a tree is defined as the
+number of its nodes; for example, the trees in Figure 2, Example 1 and Example 2 have sizes 7,1,3.
+In this paper we build a theoretical model of anti-learning when a decision tree solves the parity bit problem
+and compare it with experimental data.
+The paper Bengio et al. (2010) also studies performance of decision trees at solving the parity bit problem.
+Theorem 1 in Bengio et al. (2010) can be re-formulated as stating that accuracy is in the interval between 0%
+and50%. Our approach is much more nuanced; our work culminates in producing a formula which estimates
+an expected value of accuracy as a function of two variables, |S|and the size of the tree.
+It should be noted that although the parity bit problem and decision trees are important in themselves in the
+study of machine learning, our research interests spread far beyond them. As we have said, we first observed
+2Under review as submission to TMLR
+anti-learning resulting in monotonically decreasing accuracy (as shown in Figure 1) when we used random
+forests to predict the parity of a permutation. We also applied feed-forward neural networks to predict the
+parity of a permutation; we observed some anti-learning, but results were so noisy and unpredictable that
+we could not form any conclusions or conjectures. Studying how neural networks cope with predicting the
+parity of permutations and with similar problems is a subject of our current research. But as to decision trees
+and random forests, anti-learning reliably shows itself in the shape of monotonically decreasing accuracy, as
+in Figures 1 and 3. We are certain that the model presented in this paper will help us and other researchers
+to better understand anti-learning when it occurs in various scenarios.
+2 Linear-algebraic constructions
+By definition, every leaf set is a hyperplane in Fn. Denote by P0(orP1) the set of all vectors in Fnwhose
+parity bit is 0(or1). BothP0andP1are hyperplanes in Fn. These observations suggest that we can use
+linear algebra to estimate performance of decision trees at solving the parity bit problem. To proceed, we
+make two assumptions: (A1) we assume that the test set Sis a hyperplane, and (A2) we assume that the tree
+is balanced, therefore, each leaf set has the same dimension. The assumptions (A1) and (A2) are chosen as
+a delicate compromise which, on the one hand, ensures that our mathematical model covers a wide range of
+examples and, on the other hand, makes it feasible to use linear algebra and probability theory to estimate
+accuracy. As we will see in Figure 3, a mathematical model built under these assumptions predicts well
+accuracy in experiments produced without these assumptions.
+From now on, we write vectors as columns. Let the test set Sbe a hyperplane of Fndefined by a matrix
+equationAv=b. The training set is R=Fn\S. When we consider an individual leaf set, we denote it by
+L; letLbe a hyperplane defined by a matrix equation Cv=d. Let us denote the number of rows in A(in
+C) bya(byc); we will assume that the rows of Aare linearly independent, and the rows of Care linearly
+independent. Thus, cis the size of the support of L, the dimension of Sisn−a, and the dimension of Lis
+n−c.
+Recall that in machine learning, training is performed to maximise the rate of correct predictions on the
+training set R; therefore, for each leaf of the tree, the prediction made by the leaf is chosen to maximise the
+rate of correct predictions on R∩L, whereLis this leaf’s leaf set.
+Denote by 1a vector in Fnconsisting of 1s. Obviously, P0(orP1) is the set of all vectors vsuch that
+1Tv= 0(such that 1Tv= 1).
+Proposition 3. The vector 1Tis a linear combination of rows of AandCif and only if S∩Lis a subset
+ofP0orP1.
+Proof.In the notation introduced above, S∩Lis a hyperplane defined by a matrix equation/bracketleftbiggA
+C/bracketrightbigg
+v=
+/bracketleftbiggb
+d/bracketrightbigg
+. Suppose 1Tis a linear combination of rows of AandC, that is, for some vector t∈Fa+cwe have
+tT/bracketleftbiggA
+C/bracketrightbigg
+=1T. Hence, for every v∈S∩Lwe have tT/bracketleftbiggA
+C/bracketrightbigg
+v=tT/bracketleftbiggb
+d/bracketrightbigg
+. As to tT/bracketleftbiggb
+d/bracketrightbigg
+, it is a scalar,
+that is, either 0or1, and it does not depend on v. Thus, we have either 1Tv= 0for every v∈S∩Lor
+1Tv= 1for every v∈S∩L. Hence, either every v∈S∩Lis inP0or every v∈S∩Lis inP1.
+Conversely, suppose that S∩Lis a subset of P0orP1. Then 1Tis contained in the orthogonal complement
+of the hyperplane S∩L. The rows of AandCform a spanning set of the orthogonal complement of S∩L.
+Therefore, 1Tis a linear combination of rows of AandC.
+Proposition 4. Ifc<nthenLcontains vectors with both values of the parity bit.
+Proof.Consider an arbitrarily chosen vector v∈L. Sincec < n, there is a position iinvwhich is not in
+the support of L. Construct a vector wwhich coincides with vat all positions except i, and whose entry
+at position iis0(or1) if the entry at position iis1(or0) in the vector v. Sinceiis not in the support of
+3Under review as submission to TMLR
+Landv∈Landwcoincides with vat all positions except i, we conclude that w∈L. At the same time,
+since wandvdiffer at exactly one position, we have 1Tv̸=1Tw; in other words, one of the two vectors w
+andvis inP0and the other is in P1.
+Proposition 4 shows that it is realistic to assume, as we will in Theorem 5, that a leaf set contains vectors
+with both values of the parity bit. The only exception is c=n, when the leaf set contains exactly one vector.
+This is achieved only if the tree size is unrealistically large, so we assume that c < n. (For comparison, in
+Theorem 1 in Bengio et al. (2010) large unbalanced trees are used, and leaf sets with the support of size n
+are explicitly considered.)
+Theorem 5. Suppose a leaf set Lhas a non-empty intersection with both the training set Rand the test set
+S, and suppose Lcontains vectors with both values of the parity bit. Then accuracy on S∩Lis either 0%
+or50%. Namely, it is 0%(it is 50%) if1Tis (is not) a linear combination of rows of AandC.
+Proof.Each of the subsets L∩P0andL∩P1is non-empty, and each of them is an (n−c−1)-dimensional
+hyperplane in Fn, therefore,|L∩P0|=|L∩P1|. Suppose 1Tis a linear combination of rows of AandC.
+By Proposition 3, (S∩L)⊆Pi, whereiis0or1. Hence,R∩Lis a union of two non-overlapping subsets,
+L∩P1−iand(L∩Pi)\(S∩L). The former subset contains more elements than the latter, therefore, the
+prediction chosen on this leaf is that every vector in Lis inP1−i. This prediction is wrong on every vector
+inS∩L, since (S∩L)⊆Pi. Therefore, accuracy on S∩Lis0%.
+Now suppose 1Tis not a linear combination of rows of AandC. By Proposition 3, S∩Lhas a non-empty
+intersection with both P0andP1. Thus,S∩L∩P0andS∩L∩P1are hyperplanes in Fnhaving the same
+dimension, therefore, |S∩L∩P0|=|S∩L∩P1|. Recall that R=Fn\Sand|L∩P0|=|L∩P1|; hence,
+|S∩R∩P0|=|S∩R∩P1|. Thus, the same number of elements of S∩Rhas parity 0and parity 1; therefore,
+the prediction on this leaf will be chosen 0or1at random. Whichever it is, since |S∩L∩P0|=|S∩L∩P1|,
+this prediction will be correct on exactly a half of the vectors in S∩Land wrong on the other half of the
+vectors inS∩L. Therefore, accuracy on S∩Lis50%.
+Theorem 5 enables us to start discussing informally what accuracy we are likely to expect if the test set is
+small or large. If a, the number of rows in A, is small then it is ‘less likely’ that 1Tis a linear combination of
+rows ofAandC, but ifais large then it is ‘more likely’. Recall that the test set Sis an (n−a)-dimensional
+hyperplane of Fn, and the training set RisFn\S. Thus, if the training set is small and the test set is large,
+accuracy is ‘likely’ to be about 50%, whereas if the training set is large and the test set is small, accuracy is
+‘likely’ to be about 0%. The next section refines this discussion by producing specific numerical values.
+3 Estimating accuracy
+The following construction will be useful. Let Xbe a set of size x, and letY,Zbe two randomly chosen
+subsets ofXhaving sizes y,z, respectively. Denote the probability of YandZhaving an empty intersection
+byξ(x,y,z ). From probability theory, ξ(x,y,z ) =(x−y)!(x−z)!
+x!(x−y−z)!, and this value can be easily computed with
+the help of Stirling’s approximation.
+To produce an estimation of accuracy, we introduce one more assumption. Let ⟨A⟩and⟨C⟩denote the spaces
+(of row vectors) spanned by rows of AandC, respectively, where AandCare as defined in the previous
+section. In other words, ⟨A⟩and⟨C⟩are the orthogonal complements of SandL, respectively. Since we
+are working with row vectors, for convenience, we shall treat Fnas consisting of row vectors; thus, both ⟨A⟩
+and⟨C⟩are subspaces of Fn. Our new assumption (A3) is that ⟨A⟩and⟨C⟩are randomly chosen subsets of
+Fn. This assumption can be described as a scenario in which an algorithm building the decision tree chooses
+conditions at the nodes of the tree at random. When one considers other classification problems, this
+assumption would not be justified because the algorithm tries to optimize the tree’s performance. However,
+the parity bit problem, by its construction, is hopelessly hard for a decision tree, therefore, we feel that it is
+justifiable to assume that the decision tree behaves as if it was chosen at random.
+Proposition 6. Under the assumptions of Theorem 5 and (A3), expected accuracy on S∩Lcan be estimated
+as1
+2ξ(2n,2a,2c).
+4Under review as submission to TMLR
+Proof.Letpbe the probability that 1Tis not a linear combination of rows of AandC. According to
+Theorem 5, expected accuracy can be expressed as 0·(1−p) +1
+2p. In the remaining part of the proof we
+will show that pcan be estimated as ξ(2n,2a,2c), hence the result follows.
+Recall that we assume that that ⟨A⟩and⟨C⟩are random subsets of Fn. Hence,⟨C⟩+1also is a random
+subset ofFn. We can express the fact that 1is not a linear combination of rows of AandCas saying that
+⟨A⟩and⟨C⟩+1do not intersect. Since ⟨A⟩and⟨C⟩+1are two randomly chosen sets of sizes y= 2aand
+z= 2cinFn, whose size is x= 2n, the probability of these sets not intersecting is ξ(2n,2a,2c).
+Theorem 7. Expected accuracy can be estimated as
+1
+2ξ(2n,2n−2n−a,2n−c) +1
+2/parenleftbig
+1−ξ(2n,2n−2n−a,2n−c)/parenrightbig
+·ξ(2n,2a,2c).
+Proof.Consider a randomly chosen element vofS. Since the whole space Fnis split into leaf sets, vlies
+in a certain leaf set L. We have either R∩L=∅orR∩L̸=∅. In the former case, due to the absence of
+any elements of Rto base the prediction on, we assume that the prediction for the leaf corresponding to L
+is made at random, as either 0or1. Hence, expected accuracy on S∩Lis50%. In the latter case, we are
+in the conditions of Theorem 5, and expected accuracy is as expressed in Proposition 6.
+Now estimate the probability that R∩L=∅. For the purposes of this estimation, we treat Ras a random
+subset ofFnof sizex= 2n−2n−a, andLas a random subset of Fnof sizex= 2n−c. Hence, the probability
+is estimated as ξ(2n,2n−2n−a,2n−c). By putting these fragments together, we obtain the formula in the
+statement of the theorem.
+To perform comparison with the results of experiments produced on random data, without the linearity
+assumptions A1, A2 introduced in Section 2, we rewrite the formula in Theorem 7 as shown below, so it
+does not refer to dimensions of Sand leaf sets, but only refers to the size of Sand the size of the tree.
+Corollary 8. Expected accuracy can be estimated as
+1
+2ξ(2n,2n−|S|,2n+1
+t+ 1) +1
+2/parenleftbigg
+1−ξ(2n,2n−|S|,2n+1
+t+ 1)/parenrightbigg
+·ξ(2n,2n
+|S|,t+ 1
+2),
+wheretis the number of nodes in the tree.
+Proof.The formula is produced from the formula in Theorem 7 by substituting c= log(t+ 1)−1and
+a=n−log|S|, where logis the binary logarithm.
+Using the formula in Corollary 8, we compare the estimation of Theorem 7 with the experimental results
+produced using WEKA machine learning software Witten & Frank (2005). In Figure 3, the horizontal axis
+is the size of a training set R, shown as percentage of the size of Fn,n= 12. The vertical axis is accuracy.
+In each experiment, the size |R|is fixed and then Ris chosen as a random subset of Fnof this size. Then
+WEKA is used to produce a decision tree learning on Rto predict the parity bit, and then accuracy on
+S=Fn\Rismeasured. Notethatthetreesizeisnotconstantbutis, ineachexperiment, chosenbyWEKA’s
+algorithm and varies; we do not show the tree size on this diagram, but you can view all data in the online
+repository of the data of this paper [the weblink is temporarily removed for the time of reviewing]. Each
+circle in the line with circles shows accuracy produced in an experiment, and the corresponding diamond in
+the line with diamonds shows the estimation of accuracy produced by the formula in Corollary 8 based on the
+same test set size and tree size as in the experiment. What both graphs in Figure 3 suggest is that accuracy
+monotonically decreases from 50%to0%as the size of the training set increases. The overall shape of the
+two graphs is almost the same, so our estimation in Corollary 8 is surprisingly good, taking into account
+how simple our model is.
+In our experiments when we use random forests instead of decision trees, we also observe anti-learning, with
+approximately the same shape of a graph as in Figure 3 (cf. Figure 1, showing anti-learning when a random
+forest solves a slightly different parity problem). Of course, a mathematical model attempting to describe
+anti-learning of an ensemble of decision trees would have to be considerably more complicated than of one
+decision tree; this is why in this paper we have concentrated on modeling anti-learning of one decision tree.
+5Under review as submission to TMLR
+0 20 40 60 8001020304050
+Figure 3: Comparison of accuracy
+References
+Yoshua Bengio, Olivier Delalleau, and Clarence Simard. Decision trees do not generalize to new variations.
+Computational Intelligence , 26(4):449–467, 2010.
+Scarlett R Howard, Julian Greentree, Aurore Avarguès-Weber, Jair E Garcia, Andrew D Greentree, and
+Adrian G Dyer. Numerosity categorization by parity in an insect and simple neural network. Frontiers in
+Ecology and Evolution , 10, 2022.
+Adam Kowalczyk. Classification of anti-learnable biological and synthetic data. In European Conference on
+Principles of Data Mining and Knowledge Discovery , pp. 176–187. Springer, 2007.
+Adam Kowalczyk and Olivier Chapelle. An analysis of the anti-learning phenomenon for the class symmetric
+polyhedron. In International Conference on Algorithmic Learning Theory , pp. 78–91. Springer, 2005.
+Marvin Minsky and Seymour Papert. Perceptrons. MIT press, 1969.
+Chris Roadknight, Prapa Rattadilok, and Uwe Aickelin. Teaching key machine learning principles using
+anti-learning datasets. In 2018 IEEE International Conference on Teaching, Assessment, and Learning
+for Engineering (TALE) , pp. 960–964. IEEE, 2018.
+Ian H. Witten and Eibe Frank. Data Mining: Practical Machine Learning Tools and Techniques . Morgan
+Kaufmann, San Francisco, 2nd edition, 2005.
+6

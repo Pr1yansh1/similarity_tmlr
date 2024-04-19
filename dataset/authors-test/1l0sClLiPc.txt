@@ -1,0 +1,1063 @@
+Published in Transactions on Machine Learning Research (10/2022)
+Unimodal Likelihood Models for Ordinal Data
+Ryoya Yamasaki yamasaki@sys.i.kyoto-u.ac.jp
+Department of Systems Science
+Graduate School of Informatics, Kyoto University
+36-1 Yoshida-Honmachi, Sakyo-ku, Kyoto 606-8501 JAPAN
+Reviewed on OpenReview: https: // openreview. net/ forum? id= 1l0sClLiPc
+Abstract
+Ordinal regression (OR) is the classiﬁcation of ordinal data, in which the underlying target
+variable is categorical and considered to have a natural ordinal relation for the explana-
+tory variables. In this study, we suppose the unimodality of the conditional probability
+distribution of the target variable given a value of the explanatory variables as a natural
+ordinal relation of the ordinal data. Under this supposition, unimodal likelihood models
+are considered to be promising for achieving good generalization performance in OR tasks.
+Demonstrating that previous unimodal likelihood models have a weak representation ability,
+we thus develop more representable unimodal likelihood models, including the most repre-
+sentable one. OR experiments in this study showed that the developed more representable
+unimodal likelihood models could yield better generalization performance for real-world or-
+dinal data compared with previous unimodal likelihood models and popular statistical OR
+models having no unimodality guarantee.
+1 Introduction
+Ordinal regression (OR, also called ordinal classiﬁcation) is the classiﬁcation of ordinal data, in which the
+underlying target variable is categorical and considered to have a natural ordinal relation for the explanatory
+variables; see Section 2for a detailed formulation. Typical examples of the target label set of ordinal data
+are sets of grouped continuous variables like age groups {‘0 to 9 years old’, ‘10 to 19 years old’, . . . , ‘90 to 99
+years old’, ‘over 100 years old’} and sets of assessed ordered categorical variables like human rating {‘strongly
+agree’, ‘agree’, ‘neutral’, ‘disagree’, ‘strongly disagree’} ( Anderson ,1984), and various practical tasks have
+been tackled within the OR framework: for example, face-age estimation ( Niu et al. ,2016;Cao et al. ,2019;
+Anonymous ,2022), information retrieval ( Liu,2011), credit or movie rating ( Kim & Ahn ,2012;Yu et al. ,
+2006), and questionnaire survey in social research ( Chen et al. ,1995;Bürkner & Vuorre ,2019).
+Consider an example of the questionnaire survey about support for a certain idea that requires subjects
+to respond from {‘strongly agree’, ‘agree’, . . . }. Here, it would seem possible that subjects, who have
+features speciﬁc to those who typically respond ‘agree’, respond ‘neutral’, but unlikely that they respond
+‘disagree’ . Such a phenomenon in OR tasks can be rephrased as the unimodality of the conditional probability
+distribution (CPD) of the underlying target variable given a value of the underlying explanatory variables.
+The hypothesis “many statisticians or practitioners often judge that the data have a natural ordinal relation
+and decide to treat them within the OR framework, with unconsciously expecting their unimodality” may
+be convincing, as we will experimentally conﬁrm in Section 6.2that many ordinal data, treated in previous
+OR studies that do not consider the unimodality, tend to have a unimodal CPD.
+Commonly, the generalization performance of a statistical model or classiﬁer (OR method) based on that
+model depends on the underlying data distribution and the representation ability of that model. Recall that
+the generalization performance can be roughly decomposed into bias- and variance-dependent terms (well-
+known bias-variance decomposition); a model in which the representation ability is too strongly restricted will
+result in a large bias-dependent term if it cannot represent the underlying data distribution, and a model
+1Published in Transactions on Machine Learning Research (10/2022)
+Figure 1: Relationship among the representation abilities of 12 likelihood models that we consider in this
+paper (except for Section 5.3). We describe the name of a model and the section number of the section in
+which the model is studied in a rounded box. Models in rounded boxes with gray background are previous
+ones, and models in rounded boxes with white background are proposed in this paper. The directed graph
+with ‘rounded box’-shaped nodes implies that models in a parent node are more representable than models
+in a child node in the sense of Deﬁnition 5. Also, we describe the theorem number of the theorem that shows
+the relationship in a square box.
+that is unnecessarily ﬂexible to represent the underlying data distribution will result in a large variance-
+dependent term especially for a small-size training sample, and such models at both extremes may yield bad
+generalization performance. Therefore, assuming the unimodality of the CPD as a natural ordinal relation
+of ordinal data, unimodal likelihood models, which can adequately represent such unimodal data and are
+compact with respect to the representation ability than unconstrained statistical models such as multinomial
+logistic regression model, are considered to be promising for achieving good generalization performance in
+the conditional probability estimation and OR tasks.
+The existing studies ( da Costa et al. ,2008;Iannario & Piccolo ,2011;Beckham & Pal ,2017) were inspired
+by the shape of the probability mass function (PMF) of elementary categorical probability distributions such
+as binomial, Poisson, and uniform distributions and developed unimodal likelihood models. In this paper, we
+introduce several notions that characterize the shape of CPDs in Section 2.1and notions that characterize
+the representation ability of likelihood models in Section 2.2. Then, on the basis of these notions, we clarify
+characteristics of data distributions that their likelihood models can not represent well and show that their
+likelihood models have a weak representation ability, in Section 3. We thus propose more representable
+unimodal likelihood models in Sections 4and5. Those proposed unimodal likelihood models bridge the
+gap between previous unconstrained likelihood models (e.g., ACL and SL models in Figure 1) that have no
+unimodality guarantee and may be unnecessarily ﬂexible and previous unimodal likelihood models (e.g., POI
+and BIN models in Figure 1) that may be too weakly representable. In particular, VS-SL model described
+in Section 4.2is the most representable one among the class of unimodal likelihood models.
+We performed experimental comparisons of 2 previous unimodal likelihood models, 2 popular statistical OR
+models without the unimodality guarantee, and 8 proposed unimodal likelihood models; see Section 6and
+Appendix C. Our empirical results show that the proposed more representable unimodal likelihood models
+can be eﬀective in improving the generalization performances for the conditional probability estimation and
+OR tasks for many data that have been treated in previous OR studies as ordinal data. On the basis of these
+2Published in Transactions on Machine Learning Research (10/2022)
+results, this study suggests the eﬀectiveness of the proposed unimodal likelihood models and OR methods
+based on those models.
+2 Preliminaries
+2.1 Ordinal Regression Tasks and Ordinal Data
+The OR task is a classiﬁcation task. Denoting explanatory and categorical target variables underlying
+the data as X∈Rdand Y∈ [K]B{1, . . . , K}, we formulate the OR task as searching for a classiﬁer
+f:Rd→ [K]that is good in the sense that the task risk E[ℓ(f(X),Y)]becomes small for a speciﬁed task
+loss ℓ:[K]2→ [0,∞), where the expectation E[·]is taken for all included random variables (here Xand Y).
+Popular task losses in OR tasks include not only the zero-one loss ℓzo(j,k)B /x31{j,k}, where /x31{c}values 1 if
+a condition cis true and 0 otherwise, but also V-shaped losses reﬂecting one’s preference of smaller prediction
+errors over larger ones such as the absolute loss ℓabs(j,k)B|j−k|and the squared loss ℓsq(j,k)B(j−k)2.
+In the OR framework, it is supposed that the underlying categorical target variable Yof the data is equipped
+with an ordinal relation naturally interpretable in the relationship with the underlying explanatory variables
+X, like examples described in the head of Section 1. We here assume that the target labels are encoded
+to1, . . . , Kin an order-preserving manner, like from ‘strongly agree’, ‘agree’, ‘neutral’, ‘disagree’, ‘strongly
+disagree’ to 1, . . . , 5or5, . . . , 1. The OR framework considers the classiﬁcation of such ordinal data. Note
+that, like most previous OR studies have discussed the OR without formal common understanding of what
+constitutes ordinal data and their natural ordinal relation, it is diﬃcult to deﬁne ordinal data any more
+rigorously, and we in this paper refer to the data discussed in previous OR studies as ordinal data.
+As we declared in Section 1, this study basically assumes, as a natural ordinal relation of ordinal data,
+the unimodality in the theoretical discussion or the almost-unimodality to real-world ordinal data, precisely
+deﬁned in the following:
+Deﬁnition 1. For a vector p=(pk)k∈[K]∈RK, we deﬁne M(p)Bmin(arg maxk(pk)k∈[K])1, and say that p
+is unimodal if it satisﬁes
+p1≤ · · · ≤ pM(p)and pM(p)≥ · · · ≥ pK. (1)
+Also, we call M(p)the mode of pifpis a PMF satisfying p∈∆K−1, where ∆K−1is the (K−1)-dimensional
+probability simplex {(pk)k∈[K]|ÍK
+k=1pk=1,pk∈ [0,1]fork=1, . . . , K}. Moreover, if the CPD (Pr(Y=y|X=
+x))y∈[K]is unimodal at any xin whole the domain Rdor in its sub-domain X ⊆Rdwith a large probability
+Pr(X∈ X), we say that the data is unimodal or almost-unimodal.
+This paper presents a qualitative discussion on the representation ability of various statistical OR models.
+It aims to clarify whether each model is suitable for representing data that follow a distribution with various
+structural properties that we consider to be expectable in unimodal ordinal data. As a preparation for that
+discussion, we further introduce notions that are related to structural properties of the data distribution.
+We ﬁrst deﬁne decay rates of a PMF as the rate at which the probability value of that PMF decays from
+the mode toward both ends (1 and K):
+Deﬁnition 2. For a PMF p=(pk)k∈[K]∈¯∆K−1having a mode m∈ [K], we callpk
+pk+1fork=1, . . . , m−1
+(ifm,1) andpk
+pk−1fork=m+1, . . . , K(ifm,K) the decay rates (DRs) of p, where ¯∆K−1B{(pk)k∈[K]|ÍK
+k=1pk=1,pk∈ (0,1)fork=1, . . . , K}.
+Note that we here introduced ¯∆K−1to avoid the situation where a probability value becomes exactly 0 and
+technical problems associated with such a situation. It will appear several times in the following discussion.
+Commonly, scale of a PMF refers to the degree of spread of that PMF. The following deﬁnition gives a
+numerical characterization of the scale used in this paper and introduces related notions.
+1arg min and arg max may return a set, and so minis applied to convert it to a point and simplify the discussion.
+3Published in Transactions on Machine Learning Research (10/2022)
+Figure 2: Instances of the unimodal 10-dimensional PMFs (pk)k∈[10], in which the mode is 5, in black solid
+line, and their DRs {pk
+pk+1}4
+k=1and{pk
+pk−1}10
+k=6in red dotted line.
+Deﬁnition 3. For a PMF p=(pk)k∈[K]∈∆K−1having a mode m∈ [K], we callÍm−1
+k=1pk+ÍK
+k=m+1pk=1−pm
+the scale of p, where we deﬁne the summation notationÍsuch thatÍj
+k=ifk=0as far as i>jregardless of
+{fk}. If the scale of the CPD p(x)=(Pr(Y=y|X=x))y∈[K]is similar or dissimilar over whole the domain
+Rdof the explanatory variables X, we say that the data is homoscedastic or heteroscedastic. In particular,
+we refer to heteroscedastic data as mode-wise heteroscedastic or overall heteroscedastic data, if the scale of
+theirp(x)is similar or can be dissimilar in a domain where the conditional mode M(p(x))is the same.
+Commonly, skewness of a distribution refers to the asymmetricity of that distribution (around its mode).
+The following deﬁnition gives a numerical characterization of the skewness of the PMF used in this paper
+and introduces related notions.
+Deﬁnition 4. For a PMF p=(pk)k∈[K]∈∆K−1having a mode m∈ [K], we callÍm−1
+k=1pk−ÍK
+k=m+1pkthe
+skewness of p, and we say that pis skew or less skew when the absolute value of its skewness (absolute
+skewness) is large or small. If the absolute skewness of the CPD p(x)=(Pr(Y=y|X=x))y∈[K]is large or
+small over whole the domain Rdof the explanatory variables X, we say that the data is skew or less skew.
+For a unimodal PMF, its DRs are smaller than or equal to 1. The scale and skewness of PMFs are typically
+treated as qualitative notions, but we measure them numerically for the sake of clarity (seeÍm−1
+k=1pk+ÍK
+k=m+1pkandÍm−1
+k=1pk−ÍK
+k=m+1pkin Deﬁnitions 3and4). The numerical measure in each deﬁnition is
+intended just to further clarify our qualitative discussion, and we do not see any particular importance in that
+choice of the measure (other measures can be used instead). The readers should understand our treatment of
+them by referring to the description of Deﬁnitions 2,3, and 4and Figure 2. The ﬁgure displays 3 instances
+of the unimodal PMFs and their DRs: we say that the right PMF has a larger scale than the left PMF and
+that the center PMF is less skew and the right PMF is skew.
+2.2 Likelihood Models and Ordinal Regression Methods
+Suppose that one has a set of observations (ordinal data) {(xi,yi)}n
+i=1, each of which is drawn independently
+from an identical distribution of (X,Y). Every statistical OR method covered in this paper (except for AD
+tried in Section 6) assumes, as a model of the conditional probability Pr(Y=y|X=x), a certain likelihood
+model ˆPr(Y=y|X=x)=P(y;g(x))with a ﬁxed part P(say, the softmax function in multinomial logistic
+regression model) and learnable part g∈ G(say, a certain neural network model), where we call Pthe link
+function and gthe learner model in a learner class G. Note that the distinction between Pandgis to aid in
+understanding relation between multiple models, and this paper does not emphasize a strict mathematical
+distinction (note that, for example, (P(·;·),G)and (P(·; 2·),{g/2|g∈ G}) yield an equivalent likelihood
+model).
+The key notion in the discussion of this paper is the representation ability of the likelihood model. Formally,
+the representation ability of the likelihood model we discuss is deﬁned as follows, based on the inclusion
+relation of the function space corresponding to the likelihood model:
+4Published in Transactions on Machine Learning Research (10/2022)
+Deﬁnition 5. We say that the likelihood model based on (P1,G1)has a stronger representation ability (or is
+more representable) in the formal sense than that based on (P2,G2), if
+{(P1(y;g(·))) y∈[K]|g∈ G 1} ⊇ {( P2(y;g(·))) y∈[K]|g∈ G 2}. (2)
+The representation abilities of two diﬀerent likelihood models may not be formally comparable according
+to Deﬁnition 5, but even in such cases we in this paper discuss the relationship between the representation
+abilities from a qualitative understanding of those likelihood models as much as possible. In the following
+part of the paper, we describe results obtained via such a discussion as “one likelihood model has a stronger
+representation ability (or is more representable) in the informal sense than the other”, and distinguish them
+from results in the formal sense that follow Deﬁnition 5.
+Additionally, we introduce the functional degree of freedom:
+Deﬁnition 6. The functional degree of freedom (FDF) of a vector-valued function f1:Rd→RLto the
+minimum number of functions g1, . . . , gM:Rd→Rrequired for f1(·)=f2(g1(·), . . . , gM(·))to hold with a
+certain vector-valued function f2:RM→RL.
+In this paper, we discuss the FDF mainly for CPDs or likelihood models: For example, general CPDs
+(Pr(Y=y|X=·))y∈[K]including those underlying unimodal data have up to (K−1)-FDF (or called full-
+FDF) (it is not KsinceÍK
+y=1Pr(Y=y|X=·)=1, and can be smaller than dwhen d<K), while likelihood
+models in Figure 3are 1-FDF. We use the FDF as one simple indicator of the representation ability of
+statistical likelihood models; we consider that the larger its FDF, the stronger the representation ability of
+the statistical model tends in the informal sense.
+In this paper, we set up a statistical OR method as learning a model gfrom the class Gthrough the maximum
+likelihood estimation maxg∈G1
+nÍn
+i=1logP(yi;g(xi))(which we call a conditional probability estimation task),
+and then constructing a classiﬁer under the task with the task loss ℓasf(x)=fℓ((P(y;ˆg(x)))y∈[K])with
+fℓ((pk)k∈[K])Bmin(arg minj(ÍK
+k=1pkℓ(j,k))j∈[K])and an obtained model ˆg.
+Therefore, the only diﬀerence of statistical OR methods in this paper appears in the link function Pand
+learner class Gof the likelihood model. Under these settings, generic principles based on the bias-variance
+tradeoﬀ suggest that a compact likelihood model that can adequately represent the data is promising for
+an OR method with good generalization performance. On the other hand, we believe that subsequent
+discussions hold as well even if changing the loss function used in the parameter ﬁtting procedure and the
+decision function: As options for the parameter ﬁtting other than the maximum likelihood estimation, we
+can apply robust alternatives ( Bianco & Yohai ,1996;Croux et al. ,2013) to every likelihood model treated.
+Anonymous (2022) has developed a decision function that allows misspeciﬁcation of the likelihood model.
+3 Existing Unimodal Likelihood Models
+3.1 Binomial Model
+The (shifted) binomial distribution (Pb(k;p))k∈[K]is unimodal at any p∈ [0,1], where
+Pb(k;p)BK−1
+k−1
+pk−1(1−p)K−kfork∈ [K],p∈ [0,1], (3)
+and where k
+lBk!
+l!(k−l)!is the binomial coeﬃcient. Inspired by the shape of the PMF of the binomial
+distribution, da Costa et al. (2008) considered a unimodal likelihood model based on the link function
+P(y;u)=Pb y;1
+1+e−u=K−1
+y−1 1
+1+e−uy−11
+1+euK−y
+(4)
+and an R-valued learner model g(x)(applied to uin (4)). Thereafter, Beckham & Pal (2017) introduced the
+scaling factor: in other words, they proposed the link function
+Pbin(y;u,s)Belog(Pb(y;1
+1+e−u))/s
+ÍK
+k=1elog(Pb(k;1
+1+e−u))/sfory∈ [K],u∈R,s∈ (0,∞), (5)
+5Published in Transactions on Machine Learning Research (10/2022)
+Figure 3: Instances of the BIN model with K=10.2
+and applied a x-dependent R-valued model to uand a x-independent positive parameter to s. We call this
+likelihood model, which consists of the link function Pbinand learner class G={(g(·),s) |g:Rd→R,s∈
+(0,∞)}, the binomial (BIN) model.
+The BIN model (Pbin(y;g(x),s))y∈[K]is parametrically constrained with the 1-FDF. The mode of the binomial
+distribution is
+M((Pb(k;p))k∈[K])=min({⌈Kp⌉,⌊Kp⌋+1} ∩ [ K]), (6)
+where ⌈·⌉and⌊·⌋are the ceiling and ﬂoor functions, and hence max{1,Kp} ≤M((Pb(k;p))k∈[K]) ≤min{Kp+
+1,K}. This property and simple calculations can show the mode, unimodality, and DRs of the BIN model:
+Theorem 1. It holds that
+(i)Pbin(y+1;u,s)
+Pbin(y;u,s)= (K−y)p
+y(1−p)1/swith p=1
+1+e−ufor all y∈ [K−1],u∈R,s∈ (0,∞).
+Then, for any u∈Rand s∈ (0,∞), it holds that, for m=M((Pbin(y;u,s))y∈[K])that is (6)with p=1
+1+e−u,
+(ii) Pbin(1;u,s) ≤ · · · ≤ Pbin(m;u,s)ifm,1, and Pbin(m;u,s) ≥ · · · ≥ Pbin(K;u,s)ifm,K,
+(iii)Pbin(1;u,s)
+Pbin(2;u,s)≤ · · · ≤Pbin(m−1;u,s)
+Pbin(m;u,s)(≤1) ifm,1, and ( 1≥)Pbin(m+1;u,s)
+Pbin(m;u,s)≥ · · · ≥Pbin(K;u,s)
+Pbin(K−1;u,s)ifm,K.
+First note that Theorem 1(ii) can be seen as a direct corollary of Theorem 1(iii). Theorem 1(ii) implies that
+the BIN model is guaranteed to be unimodal. We call the constraint on the sequence of DRs like Theorem
+1(iii) as the DRs’ unimodality (constraint), considering that (p1
+p2, . . . ,pm−1
+pm,pm+1
+pm, . . . ,pK
+pK−1)is unimodal if a
+PMF (pk)k∈[K]having a mode msatisﬁes that constraint. One can ﬁnd that, owing to the DRs’ unimodality
+constraint, the BIN model cannot exactly represent unimodal MPFs in Figure 2. In addition to the DRs’
+unimodality constraint, the BIN model (Pbin(y;g(x),s))y∈[K]is always less skew especially when its mode is
+close to the labels’ intermediate value1+K
+2(recall that the mode ( 6) and median, ⌈(K−1)p⌉+1or⌊(K−1)p⌋+1,
+of the binomial distribution (Pb(k;p))k∈[K]are close ( Kaas & Buhrman ,1980)), and tends homoscedastic (see
+Figure 3; there, the scale 1−max y(Pbin(y;u,s))y∈[10]for each sis similar for many uexcept at both ends).
+We will relax the restriction of the representation ability regarding the scale of the BIN model in Section
+5.2, but that relaxed model cannot avoid the restriction regarding the DRs and skewness.
+3.2 Poisson Model
+The (shifted) Poisson distribution (Pp(k;λ))k∈Nis unimodal at any λ >0, where
+Pp(k;λ)Bλk−1e−λ
+(k−1)!fork∈N, λ∈ (0,∞). (7)
+da Costa et al. (2008) truncated ( 7) within [K]and normalize it to develop a unimodal likelihood model:
+ˆPr(Y=y|X=x)=Pp(y;g(x))/ÍK
+k=1Pp(k;g(x))with a positive-valued learner model g(x). As in the case for
+2The display style in Figure 2is like showing a PMF created by cutting the curves in Figure 3out at each u.
+6Published in Transactions on Machine Learning Research (10/2022)
+Figure 4: Instances of the POI model with K=10.
+the BIN model, Beckham & Pal (2017) developed a scaled link function
+Ppoi(y;u,s)Bevy/s
+ÍK
+k=1evk/sfory∈ [K],u,s∈ (0,∞),with vk=(k−1)log(u) −log((k−1)!)fork∈ [K],(8)
+which is a generalization of Ppoi(y;u,1)of (da Costa et al. ,2008).3They applied a x-dependent positive-
+valued learner model g(x)touand a x-independent positive parameter to s(i.e., G={(g(·),s) |g:Rd→
+(0,∞),s∈ (0,∞)}); we call this likelihood model the Poisson (POI) model.
+The POI model (Ppoi(y;g(x),s))y∈[K]is also parametrically constrained with the 1-FDF. We ﬁnd that the
+POI model is a special instance of PO-ORD-ACL and PO-ACL models discussed later (in Sections 4.1,
+5.1, and 5.2) and has a weaker representation ability in the formal sense; see Theorem 15. The POI model
+(Ppoi(y;g(x),s))y∈[K]has a DRs’ unimodality constraint similar to the BIN model. Also, it always has mode-
+wise heteroscedasticity especially when sis small and Kis large: its scale tends small and large respectively
+when M((Ppoi(y;g(x),s))y∈[K])is close to 1,K, or smaller side of {2, . . . , K−1}and larger side; see Figure 4
+with s=0.2. Therefore, it is not suitable for representing homoscedastic or overall heteroscedastic data.
+4 Novel Unimodal Likelihood Models
+4.1 Ordered Adjacent Categories Logit Model
+The previous BIN and POI models are ensured to be unimodal, but have just 1-FDF and may be too weakly
+representable for some data. We thus developed more strongly representable unimodal likelihood models
+that have up to (K−1)-FDF. This section describes ordered adjacent categories logit (ORD-ACL) model
+developed by modifying existing ACL model that does not have the unimodality guarantee.
+The (naïve) ACL model is designed to model the relationship between the underlying conditional probabilities
+of the adjacent categories,Pr(Y=y|X=x)
+Pr(Y∈{y,y+1}|X=x), as
+ˆPr(Y=y|X=x)
+ˆPr(Y∈ {y,y+1}|X=x)=1
+1+e−gy(x)fory∈ [K−1] (9)
+with an R(K−1)-valued learner model g; see Simon (1974);Andrich (1978);Goodman (1979);Masters (1982),
+andAgresti (2010, Section 4.1). Considering the normalization conditionÍK
+y=1ˆPr(Y=y|X=x)=1, it can
+be seen that the ACL model depends on the ACL link function
+Pacl(y;u)BÎy−1
+l=1e−ul
+ÍK
+k=1Îk−1
+l=1e−ul=e−Íy−1
+l=1ul
+ÍK
+k=1e−Ík−1
+l=1ulfory∈ [K],u∈RK−1, (10)
+together with the learner class G={g:Rd→RK−1}, where we deﬁne the product notationÎsuch thatÎj
+k=ifk=1as far as i>jregardless of {fk}.
+The ACL model can represent arbitrary CPD in the following sense:
+3In (Beckham & Pal ,2017),vkin (8) is deﬁned with minus u, but which is irrelevant after the softmax transformation.
+7Published in Transactions on Machine Learning Research (10/2022)
+Theorem 2. It holds that
+{(Pacl(y;g(·))) y∈[K]|g:Rd→RK−1}={p:Rd→¯∆K−1}. (11)
+Theorem 2implies that the naïve ACL model does not have the unimodality guarantee, while we analyzed
+properties of the ACL link function and then found a simple condition for its learner class under which a
+likelihood model based on the ACL link function gets the unimodality guarantee:
+Theorem 3. It holds that
+(i)Pacl(y+1;u)
+Pacl(y;u)=e−uyfor all y∈ [K−1],u∈RK−1.
+Ifu∈RK−1satisﬁes u0(B−∞) ≤ · · · ≤ um−1≤0≤um≤ · · · ≤ uK(B∞)for some m∈ [K], it holds that
+(ii) Pacl(1;u) ≤ · · · ≤ Pacl(m;u)ifm,1, and Pacl(m;u) ≥ · · · ≥ Pacl(K;u)ifm,K,
+(iii)Pacl(1;u)
+Pacl(2;u)≤ · · · ≤Pacl(m−1;u)
+Pacl(m;u)(≤1) ifm,1, and ( 1≥)Pacl(m+1;u)
+Pacl(m;u)≥ · · · ≥Pacl(K;u)
+Pacl(K−1;u)ifm,K.
+On the basis of the unimodality guarantee stated in Theorem 3(ii), we propose the ORD-ACL model
+(Pacl(y;´g(x)))y∈[K]applying the ACL link function ( 10) and ordered learner model ´g(x)satisfying that
+´g1(x) ≤ · · · ≤ ´gK−1(x)for any x∈Rd. Here, the ordered learner model ´gcan be implemented as
+´gk(x)=(
+g1(x), fork=1,
+´gk−1(x)+ρ(gk(x)),fork=2, . . . , K−1,(12)
+with another model g:Rd→RK−1and a ﬁxed function ρthat satisﬁes
+{ρ(u) |u∈R}=[0,∞) (13)
+such as ρsq(u)Bu2(we denote the procedure ( 12) as ´g=ρ[g]).4
+The ORD-ACL model can represent arbitrary unimodal CPD that has the DRs’ unimodality constraint:
+Theorem 4. For any function ρsatisfying (13), it holds that
+{(Pacl(y;ρ[g(·)])) y∈[K]|g:Rd→RK−1}
+={p:Rd→¯∆K−1| (p1(x)
+p2(x), . . . ,pM(p(x))−1(x)
+pM(p(x))(x),pM(p(x))+1(x)
+pM(p(x))(x), . . . ,pK(x)
+pK−1(x))is unimodal for any x∈Rd}.(14)
+It will be a good aspect in the modeling of the ordinal data assumed to be unimodal that the ORD-ACL
+model has the unimodality guarantee. In contrast, the ORD-ACL model incidentally imposes a constraint
+on the DRs; even so it is important that the ORD-ACL model has a stronger representation ability in the
+formal sense than the BIN and POI models, which also have DRs’ unimodality constraint.
+4.2 V-Shaped Stereotype Logit Model
+We next describe V-shaped stereotype logit (VS-SL) model, which is unimodal, full-FDF, more representable
+than the ORD-ACL model in the formal sense (see Theorem 10), and developed by modifying existing SL
+model (also called multinomial logistic regression models).
+The SL model (refer to Anderson (1984) and Agresti (2010, Section 4.3)) attempts to model the conditional
+probabilities of multiple categories paired with a certain ﬁxed (stereotype) category,Pr(Y=1|X=x)
+Pr(Y∈{1,y}|X=x), as
+ˆPr(Y=1|X=x)
+ˆPr(Y∈ {1,y}|X=x)=1
+1+e−gy(x)fory∈ [K] (15)
+4If a non-zero alternative ρexp(u)Beuis used as the function ρ, inequalities in the ordering condition of ´gand the
+unimodality condition reduce to the strict inequalities. Using such a ρfunction does not cause serious computational problems.
+8Published in Transactions on Machine Learning Research (10/2022)
+with an RK-valued learner model gsuch that g1(x)=0for any x∈Rd. Considering the normalization
+condition, we introduce the SL link function as
+Psl(y;u)Be−uy
+ÍK
+k=1e−ukfory∈ [K],u∈RK. (16)
+The SL model is based on the SL link function Psland learner class G={g:Rd→RK|g1(·)=0}.
+The SL model can represent arbitrary CPD:
+Theorem 5. It holds that
+{(Psl(y;g(·))) y∈[K]|g:Rd→RK,g1(·)=0}={(Psl(y;g(·))) y∈[K]|g:Rd→RK}={p:Rd→¯∆K−1}.(17)
+The ACL and SL link functions have only minor diﬀerences in parameterization, but looking at the SL link
+function will reveal another simple way to create a unimodal likelihood model as follow:
+Theorem 6. Ifu∈RKsatisﬁes that u1≥ · · · ≥ umifm,1and um≤ · · · ≤ uKifm,Kfor some m∈ [K],
+it holds that Psl(1;u) ≤ · · · ≤ Psl(m;u)ifm,1and Psl(m;u) ≥ · · · ≥ Psl(K;u)ifm,K.
+On the ground of this theorem, we proposed VS-SL model (Psl(y;ˇg(x)))y∈[K]based on the SL link function
+Psland a V-shaped learner model ˇg=τ(´g)(described below) with ´g=ρ[g]and another RK-valued learner
+model g. Namely, the VS-SL model applies the learner class G={τ(ρ[g]) |g:Rd→RK}for the link
+function Psl. First, ρtransforms an arbitrary model gto an ordered model ´g(so´g1(x) ≤ · · · ≤ ´gK(x)for
+anyx∈Rd). Next, τtransforms an ordered model ´gto a V-shaped model τ(´g). Here, the notation τ(u)for
+anRK-valued object uimplies the element-wise application (τ◦uk)k∈[K], and the function τis supposed to
+satisfy
+τ(u)is non-increasing in u<0and non-decreasing in u>0,
+and{τ(u) |u≤0}={τ(u) |u≥0}=[τ(0),∞),(18)
+such as τabs(u)B|u|and τsq(u)Bu2. If τ=τabs, τsq, it holds that ˇg1(x) ≥ · · · ≥ ˇgm(x)(x)and ˇgm(x)(x) ≤
+· · · ≤ ˇgK(x)with m(x)=min(arg mink(|´gk(x)|)k∈[K]), as required in Theorem 6. Finally, the SL link function
+transforms ˇgto a unimodal likelihood model.
+The VS-SL model (Psl(y;ˇg(x)))y∈[K]is ensured to be unimodal and further can represent arbitrary unimodal
+CPD:
+Theorem 7. For any functions ρsatisfying (13)and τsatisfying (18), it holds that
+{(Psl(y;τ(ρ[g(·)]))) y∈[K]|g:Rd→RK}={p:Rd→¯∆K−1|p(x)is unimodal for any x∈Rd}. (19)
+Accordingly, we propose the VS-SL model as the most representable one among the class of the unimodal
+likelihood models.
+5 Variant Models
+5.1 Proportional-Odds Models
+The ACL model (Pacl(y;g(x)))y∈[K], ORD-ACL model (Pacl(y;ρ[g(x)]))y∈[K], SL model (Psl(y;g(x)))y∈[K],
+and VS-SL model (Psl(y;τ(ρ[g(x)]))) y∈[K]have up to full-FDF and may be too ﬂexible and diﬃcult to
+learn for some data especially when the sample size is not large enough. In the statistical research (e.g.,
+seeMcCullagh (1980)), the proportional-odds (PO) constraint that constrains the FDF of the likelihood
+model to 1 is often applied to avoid such a trouble. We call (Pacl(y;b−g(x) ·1))y∈[K]the PO-ACL model,
+(Pacl(y;ρ[b]−g(x)·1))y∈[K]the PO-ORD-ACL model, and (Psl(y;τ(ρ[b]−g(x)·1)))y∈[K]the PO-VS-SL model,
+where band1are learnable parameter and all-1 vector with appropriate dimension ( (K−1)for ACL and
+ORD-ACL models, or Kfor VS-SL models) and gis anR-valued learner model.5
+5The PO-SL model Psl(y;b−g(x) ·1)=e−by/ÍK
+k=1e−bkis constant regarding xand may be weakly representable. Therefore,
+Anderson (1984) considered to use a learner model g(x)=a−g(x) ·cwith learnable parameters a,c(∈RKhere) s.t. a1=c1=0
+9Published in Transactions on Machine Learning Research (10/2022)
+Figure 5: Instances of the PO-ACL model with K=10.
+Figure 6: Instances of the OH-ACL model with K=10.
+Recall the POI model reviewed in Section 3.2. The equation
+Ppoi(y;u,s)=Pacl(y;b−v·1)for all y∈ [K],withb=(log(k)/s)k∈[K−1],v=log(u)/s, (20)
+which is formalized in Theorem 15, shows that the PO-ACL and PO-ORD-ACL models are more repre-
+sentable in the formal sense than the POI model. The PO-ACL and PO-ORD-ACL models can further
+represent homoscedastic data and more various mode-wise heteroscedastic data because they can adjust the
+parameter borρ[b]according to the model ﬁt to the data, compared with the POI model; compare Figure
+4for the POI model and Figure 5for the PO-ACL and PO-ORD-ACL models.
+5.2 Overall Heteroscedastic Models
+The BIN, POI, and PO models have just 1-FDF. The strong constraint of the representation ability of these
+models can be interpreted as incidentally assuming the homoscedasticity or mode-wise heteroscedasticity.
+We in this section describe their overall homoscedastic (OH) extension, OH models.
+McCullagh (1980) studied an OH extension of a certain PO model. According to his idea, we propose the
+OH-ACL model (Pacl(y;{b−g(x) ·1}/s(x)))y∈[K], OH-ORD-ACL model (Pacl(y;{ρ[b] −g(x) ·1}/s(x)))y∈[K],
+and OH-VS-SL model (Psl(y;τ(ρ[b] −g(x) ·1)/s(x)))y∈[K], where band1are learnable parameter and all-1
+vector with appropriate dimension, and gand sareR- and positive-valued learner models. The positive-
+valued scale model scan be implemented as s(x)=r+ρ(t(x))with a constant r>0for avoiding zero-division,
+ﬁxed non-negative function ρ, and another R-valued learner t.
+The signiﬁcance of OH models is that their scaling factor can vary depending on x. Extending previous BIN
+and POI models by Beckham & Pal (2017), we also introduce the OH-BIN model (Pbin(y;g(x),s(x)))y∈[K]
+and OH-POI model (Ppoi(y;g(x),s(x)))y∈[K]. For the implementation s(x)=r+ρ(t(x))of the scaling factor
+for these models, the use of a small r>0enables to represent a wider class distribution. Note that the
+OH-POI model is a special instance of the OH-ACL and OH-ORD-ACL models in the formal sense, as
+Theorem 15shows.
+andR-valued learner model g:Rd→R(we call ga rotatable-odds (RO) learner model) for the SL link function; we call
+this model the RO-SL model. We can also consider novel RO-ACL model: it is more representable than the PO-ACL (and
+PO-ORD-ACL) model, but has no unimodality guarantee since the RO learner model g(x)=a−g(x) ·cdoes not necessarily
+satisfy the ordering condition g1(x) ≤ · · · ≤ gK−1(x)(depending on c).
+10Published in Transactions on Machine Learning Research (10/2022)
+These OH models can represent overall heteroscedastic data and are more representable in the formal sense
+than their corresponding 1-FDF model (see Theorem 14), but their representation ability is parametrically
+constrained with the 2-FDF; compare Figures 3,4,5, and 6.
+5.3 Combination-with-Uniform Models
+When a likelihood model (ˆPr(Y=y|X=x))y∈[K]is unimodal, the combination-with-uniform (CU) likelihood
+model, q(x) · (1
+K)k∈[K]+{1−q(x)} · ( ˆPr(Y=y|X=x))y∈[K]with e.g., q(x)=1
+1+e−t(x)for an R-valued learner t,
+is also unimodal. For example, Piccolo (2003);Iannario & Piccolo (2011) studied a combination of uniform
+and binomial model. The CU extension of low-FDF (like PO and OH) models can increase their FDF by 1.
+6 Experiments
+6.1 Experimental Purposes
+From the bias-variance tradeoﬀ, it can be expected that compact likelihood models that can adequately
+represent the data will yield better generalization performance in the conditional probability estimation
+task, and accordingly that OR methods based on such likelihood models will yield better generalization
+performance in the OR task. We performed numerical experiments in order to verify whether the proposed
+likelihood models, developed based on this working hypothesis, can provide better performances than previ-
+ous unimodal likelihood models with a weak representation ability and popular statistical OR models with
+no unimodality guarantee.
+6.2 Experimental Settings
+We selected 21 real-world datasets of those used in experiments by the previous OR study ( Gutierrez et al. ,
+2015) with the total sample size ntotthat is 1000 or more, and used them for our numerical experiments.6
+AB5, . . . , CE5’ (resp. AB10, . . . , CE10’) are datasets generated by discretizing a real-valued target of
+datasets, which are often used to benchmark regression methods, by 5 (resp. 10) diﬀerent bins with equal
+proportions. SW, . . . , CA originally have a categorical target, and the authors of ( Gutierrez et al. ,2015)
+judged that their targets have a natural ordinal relation.
+Table 1shows the dataset name, dataset properties ntot,d, and K, and mean and standard deviation (STD)
+of 100 test MUs and test DRs’ MUs. The mean unimodality (MU) is a numerical criterion to evaluate
+the unimodality of the conditional probability distribution of the data, and it is deﬁned, for a likelihood
+model ˆPr(Y=·|X=·)and nused data points, as1
+nÍn
+i=1 /x31{(ˆPr(Y=y|X=xi))y∈[K]is unimodal. }. As
+that likelihood model, we used the test SL model under the task-P (described below) that can represent
+any conditional probability distribution. We trained a likelihood model with a training sample of size
+ntra=800, and evaluated the MU with an obtained likelihood model and a remaining test sample of size
+ntes=ntot−ntra. We repeated this procedure 100 trials with a randomly-set diﬀerent sample setting
+and initial parameters of the likelihood model to obtain 100 test MUs. We also give a relative reference
+value in Table 2: It shows a ratio that 106samples of the PMF uniformly and randomly drawn from
+the probability simplex in RKwere unimodal for K=3, . . . , 10. Comparing the test MU in Table 1and
+the relative reference value of the same Kin Table 2, one can ﬁnd that many real-world data treated as
+ordinal data by existing OR research tend strongly unimodal. Additionally, we introduced the DRs’ MU
+1
+nÍn
+i=1 /x31{(ˆPr(Y=y|X=xi))y∈[K]satisﬁes the DRs’ unimodality. }, and took a similar procedure to that for
+the MU; see Tables 1and2. The DRs’ MU for ordinal data were larger than those for uniform random
+PMF, but their diﬀerence appears to be relatively smaller than that for the MU.7
+6One can get the datasets from a researchers’ site ( http://www.uco.es/grupos/ayrna/orreview ) of ( Gutierrez et al. ,2015),
+or our GitHub repository ( https://github.com/yamasakiryoya/ULM ) together with our used program codes.
+7For notions related to the scale and skewness, we introduced numerical measures in Deﬁnitions 3and4just for the sake
+of clarity of the qualitative discussion. However, we did not introduce metrical meaning into these measures (and it is quite
+diﬃcult): for example, a gap between scales 0.1 and 0.3 and a gap between scales 0.7 and 0.9 would not have the same meaning.
+Therefore, we could not evaluate the heteroscedasticity without misleading.
+11Published in Transactions on Machine Learning Research (10/2022)
+Table 1: Dataset name, dataset properties ntot,d, and K, and mean and STD (as ‘ mean ±STD’) of test
+MUs and test DRs’ MUs.
+dataset name ntot d K MU DRs’ MU
+AB5 (abalon5) 4177 10 5 .8915 ±.0662 .4042 ±.0743
+BA5 (bank5) 8192 8 5 .9944 ±.0387 .4293 ±.1389
+BA5’ (bank5’) 8192 32 5 .9887 ±.0167 .7041 ±.1210
+CO5 (computer5) 8192 12 5 .9956 ±.0137 .5623 ±.1041
+CO5’ (computer5’) 8192 21 5 1.0000 ±.0001 .5851 ±.1170
+CH5 (cal.housing5) 20640 8 5 .9065 ±.1027 .3993 ±.1206
+CE5 (census5) 22784 8 5 .7887 ±.0929 .3221 ±.1050
+CE5’ (census5’) 22784 16 5 .8332 ±.0736 .3827 ±.0978
+AB10 (abalon10) 4177 10 10 .3218 ±.1315 .0076 ±.0164
+BA10 (bank10) 8192 8 10 .8923 ±.1463 .0225 ±.0432
+BA10’ (bank10’) 8192 32 10 .5101 ±.2261 .0019 ±.0054dataset name ntot d K MU DRs’ MU
+CO10 (computer10) 8192 12 10 .8006 ±.1431 .0935 ±.0883
+CO10’ (computer10’) 8192 21 10 .8189 ±.1617 .0517 ±.0737
+CH10 (cal.housing10) 20640 8 10 .3311 ±.1713 .0051 ±.0095
+CE10 (census10) 22784 8 10 .2042 ±.1017 .0008 ±.0018
+CE10’ (census10’) 22784 16 10 .3151 ±.1153 .0027 ±.0053
+SW (SWD) 1000 10 4 .9993 ±.0027 .9853 ±.0204
+LE (LEV) 1000 4 5 .9547 ±.0666 .2208 ±.1555
+ER (ERA) 1000 4 9 .7909 ±.1045 .2126 ±.1403
+WR (winequality-red) 1599 11 6 .9894 ±.0457 .1415 ±.1259
+CA (car) 1728 21 4 .8735 ±.2037 .0276 ±.0223
+Table 2: Ratio of 106PMF samples uniformly and randomly drawn from ∆K−1that satisﬁed the unimodality
+(resp. the DRs’ unimodality) in the row MU (resp. in the row DRs’ MU).
+K 3 4 5 6 7 8 9 10
+MU .6666 .3330 .1329 .0444 .0125 .0032 .0007 .0001
+DRs’ MU .6666 .3330 .1329 .0276 .0055 .0009 .0001 .0000
+We considered 4 tasks: a conditional probability estimation task (task-P), and 3 OR tasks with the zero-one
+task loss ℓzo(task-Z), absolute task loss ℓabs(task-A), and squared task loss ℓsq(task-S). Results for the
+task-P, -Z, -A, and -S are respectively evaluated based on the negative log likelihood (NLL), mean zero-one
+error (MZE), mean absolute error (MAE), and mean squared error (MSE). Note that, for a likelihood model
+ˆPr(Y=·|X=·)and nused data points, the NLL is deﬁned as −1
+nÍn
+i=1logˆPr(Y=yi|X=xi), and the MZE,
+MAE, and MSE are respectively deﬁned as1
+nÍn
+i=1ℓ(f(xi),yi)with f(x)=fℓ((ˆPr(Y=y|X=x))y∈[K])for
+ℓ=ℓzo, ℓabs, ℓsq. A method that yields a smaller error value is better for the corresponding task.
+We tried 12 likelihood models and OR methods based on those likelihood models: previous 1-FDF BIN
+and POI models; proposed 1-FDF PO-ORD-ACL and PO-VS-SL models; proposed 2-FDF OH-BIN, OH-
+POI, OH-ORD-ACL, and OH-VS-SL models; proposed full-FDF ORD-ACL and VS-SL models; previous
+full-FDF ACL and SL models with no unimodality guarantee. See Figure 1for the relationship among the
+representation abilities of these models. Here, we used link functions ρ=ρexpto ensure the non-negativity
+and for a positive learner model for POI and OH-POI models and τ=τsqto ensure the V-shape, and a
+positive constant r=0.01in the scaling model s(x)=r+ρ(t(x))for OH models. We implemented all
+learner models with a 4-layer fully-connected neural network model that shares weights in except for the
+ﬁnal layer and has 100 nodes activated with the sigmoid function in addition to bias nodes in every hidden
+layer. Note that, for the OH models, we implemented their real-valued learner and scaling models ( gand t
+in the notation in Section 5.2) with two isolated networks (each of which is described above), because their
+performance was signiﬁcantly degraded when the real-valued learner and scaling models were implemented
+with a single weight-shared network. We trained a model with a training sample and Adam optimization
+for 1000 epochs according to the maximum likelihood estimation, and evaluated the NLL, MZE, MAE, and
+MSE with a remaining test sample at the end of each epoch. Then, for the task-P, -Z, -A, or -S, we adopted
+a model at the timing when the test NLL, MZE, MAE, or MSE got minimum as the test model under the
+coresponding task.
+As a baseline method, we also tried a regression-based OR method (AD) ( Agarwal ,2008). This method solves
+least absolute deviation regression task with targets {yi},ming:Rd→R1
+ntraÍntra
+i=1|g(xi) −yi|with a regression
+predictor gimplemented with a 4-layer fully-connected neural network model, and predicts a class label for
+X=xby a label value closest to g(x)among [K]. For AD, we evaluated only the MZE, MAE, and MSE.
+We experimented with 6 training sample size settings ntra=25,50,100,200,400,800, to see the dependence
+of behaviors of each method on the training sample size.
+For all combinations of 21 datasets, 4 tasks, 12/13 likelihood models, and 6 training sample size settings,
+we repeated above-described procedure 100 trials with a randomly-set diﬀerent training sample and initial
+parameters, to obtain 100 test errors under the corresponding task.
+12Published in Transactions on Machine Learning Research (10/2022)
+Table 3: A cell for a method and training sample size ntrain a sub-table for an error shows the total (over
+the 21 datasets and 11/12 other methods) number #win (resp. #lose) of times that that method wins (resp.
+loses) in the Mann-Whitney U-test with p-value 0.05regarding the error for each pair of that method and
+other method (as ‘#win, #lose’). A method with larger #win and smaller #lose is better. In each block for
+ntrain a sub-table, the 1st, 2nd, and 3rd best results are highlighted in the red, green, and blue colors.
+NLL
+ntra=25ntra=50ntra=100ntra=200ntra=400ntra=800
+BIN 95, 90 93, 91 86, 83 79, 82 67,111 49,142
+POI 110, 64 111, 76 94, 84 82, 97 64,125 41,152
+PO-ORD-ACL 47,152 41,150 31,147 33,145 42,151 34,149
+PO-VS-SL 60,146 65,136 57,134 44,132 49,132 55,121
+OH-BIN 134, 46 134, 40 109, 50 73, 76 71,110 71,102
+OH-POI 147, 23 140, 38 116, 53 92, 78 66,113 66,118
+OH-ORD-ACL 77, 92 74, 93 78, 74 73, 74 72, 96 77, 96
+OH-VS-SL 93, 90 89, 92 91, 73 84, 55 98, 79 118, 63
+ORD-ACL 131, 50 142, 33 136, 37 115, 46 134, 38 141, 39
+VS-SL 63,125 63,130 60,117 92, 65 147, 32 168, 25
+ACL 119, 61 115, 50 126, 36 149, 29 162, 22 156, 29
+SL 35,172 34,172 49,145 73,110 109, 72 123, 63
+MZE
+ntra=25ntra=50ntra=100ntra=200ntra=400ntra=800
+BIN 81, 39 67, 53 70, 75 56,102 49,127 39,136
+POI 94, 61 64,111 34,153 17,183 19,188 15,184
+PO-ORD-ACL 58, 50 51, 60 45, 96 37,125 38,135 42,132
+PO-VS-SL 62, 39 74, 50 59, 84 58,112 47,124 51,124
+OH-BIN 104, 32 116, 22 132, 23 158, 34 159, 42 132, 53
+OH-POI 129, 13 110, 33 121, 45 105, 73 100, 91 85, 98
+OH-ORD-ACL 47, 68 50, 82 64, 90 67, 95 81, 95 94, 80
+OH-VS-SL 49, 67 60, 58 86, 65 103, 65 126, 53 131, 50
+ORD-ACL 99, 35 124, 27 143, 29 157, 29 135, 35 135, 46
+VS-SL 78, 76 79, 53 107, 42 137, 29 151, 34 145, 29
+ACL 32,159 53,140 76, 88 116, 57 130, 54 129, 41
+SL 0,240 12,221 22,197 54,149 80,106 96, 86
+AD 83, 37 94, 44 96, 68 84, 96 78,109 82,117MAE
+ntra=25ntra=50ntra=100ntra=200ntra=400ntra=800
+BIN 77, 22 75, 34 63, 44 69, 49 62, 58 62, 71
+POI 92, 23 66, 43 56, 67 38, 90 36,104 38, 99
+PO-ORD-ACL 55, 48 66, 49 62, 56 54, 60 49, 70 59, 77
+PO-VS-SL 68, 36 82, 37 77, 48 66, 47 56, 55 65, 64
+OH-BIN 74, 23 81, 28 72, 43 73, 57 65, 71 52, 94
+OH-POI 103, 5 95, 24 95, 53 69, 83 54, 95 49,110
+OH-ORD-ACL 36, 83 31, 97 33,102 21,110 37, 95 49, 98
+OH-VS-SL 34, 92 33,109 38,103 35,102 54, 93 51,102
+ORD-ACL 87, 24 107, 26 128, 23 134, 13 130, 21 146, 32
+VS-SL 49, 66 61, 44 91, 22 120, 20 142, 12 148, 23
+ACL 37,125 44,123 57, 94 88, 53 101, 40 125, 44
+SL 0,239 7,224 13,213 22,158 39,110 71, 93
+AD 100, 26 112, 22 111, 28 96, 43 74, 75 75, 83
+MSE
+ntra=25ntra=50ntra=100ntra=200ntra=400ntra=800
+BIN 81, 8 72, 22 66, 23 87, 23 87, 29 89, 37
+POI 94, 14 83, 28 69, 35 59, 35 63, 37 82, 45
+PO-ORD-ACL 43, 48 51, 48 52, 44 67, 41 76, 35 92, 32
+PO-VS-SL 52, 53 58, 42 65, 45 74, 31 81, 31 95, 32
+OH-BIN 91, 11 84, 17 69, 25 46, 69 32,106 34,136
+OH-POI 112, 3 104, 11 84, 31 54, 66 49,104 37,123
+OH-ORD-ACL 26, 75 28, 74 32, 74 30, 81 53, 76 67, 75
+OH-VS-SL 25, 92 28, 96 32, 85 39, 92 56, 79 58, 94
+ORD-ACL 80, 9 85, 20 113, 16 118, 10 120, 23 126, 31
+VS-SL 49, 54 62, 37 82, 27 95, 21 121, 15 124, 21
+ACL 33,110 35,106 42, 76 84, 39 92, 38 99, 47
+SL 0,225 2,213 3,194 26,151 39,121 55,107
+AD 61, 45 79, 57 56, 90 23,143 20,195 18,196
+6.3 Experimental Results
+6.3.1 Outline of Results
+Table 3shows the results of a comparison of all the methods. In summary, the OH-BIN, OH-POI, and ORD-
+ACL models were especially good when ntrawas small, the ORD-ACL and VS-SL models were especially
+good when ntrawas large, for every task. These results imply that methods based on likelihood models
+with a weak (resp. strong) representation ability are more eﬀective when the training sample size is small
+(resp. large), and that unimodal models yielded better performances than the ACL and SL models, which
+are more representable but have no unimodality guarantee, under our implementation of the models (neural
+network architecture) and within the sample sizes that we considered (ntra≤800). These results clariﬁed
+the signiﬁcance of the proposed more representable unimodal likelihood models.
+6.3.2 Detail of Results
+For a better understanding of the obtained results, we further provide considerations about comparisons
+within each set of methods that have interesting diﬀerences while maintaining commonality. We believe that
+these considerations will be helpful for future development; see also Table 4.
+POI v.s.PO-ORD-ACL, and OH-POI v.s.OH-ORD-ACL The POI model is a special instance of
+the PO-ORD-ACL model with ﬁxed mode-wise heteroscedasticity, and has a weaker representation ability
+in the formal sense (see Theorem 15). This relation might make the POI model work better when ntra
+was small and the PO-ORD-ACL model work better when ntrawas large, in every task. The situation for
+OH-POI v.s.OH-ORD-ACL is similar to that for POI v.s.PO-ORD-ACL.
+BIN v.s.POI v.s.PO-ORD-ACL v.s.PO-VS-SL (1-FDF) The PO-ORD-ACL and PO-VS-SL
+models can adjust the mode-wise heteroscedasticity, while the BIN and POI models cannot. In this regard,
+the PO-ORD-ACL and PO-VS-SL models tend more representable in the informal (or formal) sense than
+the BIN and POI models. For this reason, it can be considered that the BIN and POI models worked better
+when ntrawas small and the PO-ORD-ACL and PO-VS-SL models worked better when ntrawas large.
+13Published in Transactions on Machine Learning Research (10/2022)
+Table 4: A cell for an error and training sample size ntrain a sub-table for a group of speciﬁed methods
+shows the total (over the 21 datasets) number of times that each method wins in the Mann-Whitney U-test
+with p-value 0.05regarding the error for each pair of that method and other method in that group. In each
+cell in a sub-table, methods that win the most times are highlighted in the corresponding color.
+POI v.s.PO-ORD-ACL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 12,5 12,5 13,4 14,5 11,8 7,7
+MZE 6,5 5,7 3,11 2,10 3,11 1,11
+MAE 5,1 4,2 1,2 1,4 2,6 2,5
+MSE 7,1 6,1 3,2 1,2 2,2 1,4
+BIN v.s.POI v.s.PO-ORD-ACL v.s.PO-VS-SL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 37,36,17,20 37,36,14,23 33, 34,13,20 32, 33,13,20 29, 30,16,20 23,24,16, 25
+MZE 16,20,6,10 16,14,9, 1623,7,15,20 25,6,13,23 24,7,18, 2622,6,19, 26
+MAE 11,13,2,5 7, 8,4,7 6,3,5, 11 12,2,5,12 13,4,9,11 15,5,9,10
+MSE 15,15,2,4 8, 13,2,5 8,8,4,6 10,2,4,5 5,4,5,5 5,4,9,9
+BIN v.s.OH-BIN
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 3,13 4,14 4,11 4,7 7,9 6,11
+MZE 0,6 0,6 0,11 1,15 1,17 0,16
+MAE 1,1 2,5 3,4 5,5 6,6 7,3
+MSE 0,1 1,2 2,3 8,2 14,1 15,0
+POI v.s.OH-POI
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 2,7 4,10 5,10 5,11 6,11 4,14
+MZE 1,8 0,12 0,16 0,18 1,17 1,18
+MAE 1,6 0,7 4,9 5,8 5,8 8,6
+MSE 0,3 2,6 4,6 6,3 9,3 13,1
+OH-POI v.s.OH-ORD-ACL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 13,1 12,2 10,4 8,8 6,11 7,11
+MZE 10,1 9,3 10,4 8,4 8,6 5,10
+MAE 8,0 10,0 11,1 8,2 5,5 6,7
+MSE 13,0 9,0 9,0 5,3 4,5 1,10
+OH-BIN v.s.OH-POI v.s.OH-ORD-ACL v.s.OH-VS-SL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 28,37,8,10 32, 35,9,13 23, 28,13,13 14, 21,17,19 15,15,24, 3016,14,23, 36
+MZE 22,30,4,4 23, 24,5,9 29,27,6,16 36,18,6,16 34,12,12,24 26,12,15,25
+MAE 19,22,3,2 22, 26,3,2 19, 26,4,4 25,20,4,6 19,12,12,11 17,14,17,13
+MSE 23,29,2,1 20, 23,3,2 17, 22,2,2 13, 14,7,7 7,12, 13,11 9,10, 24,18PO-ORD-ACL v.s.OH-ORD-ACL v.s.ORD-ACL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 7,15, 28 6,13, 28 1,14, 26 3,16, 22 4,14, 30 1,14, 33
+MZE 6,2,17 6,2,22 3,7,28 2,10, 34 3,13, 27 3,16, 27
+MAE 7,2,16 9,1,22 8,2,26 9,1,27 7,5,22 8,7,26
+MSE 2,0,13 5,0,15 3,1,23 9,1,24 8,4,18 12,4, 19
+PO-VS-SL v.s.OH-VS-SL v.s.VS-SL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 11,22,17 12, 24,19 11, 26,16 3,20, 21 5,15, 29 4,19, 29
+MZE 9,5,10 8,5,10 4,9,17 2,14, 25 0,18, 28 1,21, 24
+MAE 19,1,9 21,0,11 14,1, 17 11,3, 22 7,5,26 10,5, 25
+MSE 13,1,10 13,0,12 11,3, 13 13,3, 15 8,3,17 12,5, 16
+ORD-ACL v.s.ACL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 9,5 8,3 8,5 5,9 2,7 3,7
+MZE 16,0 17,0 11,0 8,2 5,3 5,6
+MAE 15,0 14,0 12,1 8,1 8,1 6,2
+MSE 14,0 14,0 10,0 7,1 8,2 5,2
+VS-SL v.s.SL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 14,2 15,3 13,5 13,5 12,3 12,4
+MZE 21,0 19,0 18,0 17,2 14,2 10,2
+MAE 21,0 20,0 19,0 17,0 15,1 12,2
+MSE 20,0 20,0 19,0 15,0 15,1 13,1
+ORD-ACL v.s.VS-SL v.s.ACL v.s.SL
+ntra=25 ntra=50 ntra=100 ntra=200 ntra=400 ntra=800
+NLL 44,16,40,4 46,16,36,3 41,14,38,8 24,16, 36,9 14,26, 30,8 14, 31,26,10
+MZE 43,37,21,0 44,33,20,0 40,32,18,0 30,29,18,4 22, 27,20,4 21, 22,21,5
+MAE 42,29,20,0 42,29,19,0 37,29,19,0 29,28,19,0 26,26,15,2 25,22,18,3
+MSE 40,28,19,0 36,30,19,0 37,28,14,0 29,21,18,0 27,25,14,2 24,24,14,3
+BIN v.s.OH-BIN, and POI v.s.OH-POI The OH-BIN and OH-POI models are respectively OH-
+generalizations of the BIN and POI models, and have a stronger representation ability in the formal sense.
+Thus, OH models were better regarding the NLL that was directly optimized. However, OH models were
+bad for some tasks (especially, task-A and -S) when ntrawas large, which is a counter-intuitive result and
+requires further analysis but may be because the diﬀerence of the restricted structures of the two likelihood
+models makes a diﬀerence in the compatibility between the model and task.
+OH-BIN v.s.OH-POI v.s.OH-ORD-ACL v.s.OH-VS-SL (2-FDF) The situation is similar to
+that for the 1-FDF models, BIN v.s.POI v.s.PO-ORD-ACL v.s.PO-VS-SL.
+PO-ORD-ACL v.s.OH-ORD-ACL v.s.ORD-ACL, and PO-VS-SL v.s.OH-VS-SL v.s.VS-SL
+The VS-SL, OH-VS-SL, and PO-VS-SL models (and the ORD-ACL, OH-ORD-ACL, and PO-ORD-ACL
+models) are more representable in the formal sense in that order. Presumably for this reason, the PO- and
+OH-VS-SL models worked better with small ntra, and the VS-SL model worked better with large ntra.
+ORD-ACL v.s.ACL The ACL model can represent any data (see Theorem 2), and the ORD-ACL model
+can represent unimodal data with the DRs’ unimodality constraint (see Theorem 4). The unimodality of the
+ORD-ACL model might improve the generalization performance when ntrawas small, but the ORD-ACL
+model was not good when ntrawas large perhaps because its DRs’ unimodality constraint restricted its
+representation ability too much for our tried data; see again DRs’ MU in Tables 1and2.
+14Published in Transactions on Machine Learning Research (10/2022)
+VS-SL v.s.SL The SL model can represent any data (see Theorem 5), and the VS-SL model can represent
+any unimodal data (see Theorem 7). Unlike the comparison between ACL and ORD-ACL models, the VS-SL
+model gave better results than the SL model, probably thanks to the validity of the unimodal hypothesis.
+ORD-ACL v.s.VS-SL v.s.ACL v.s.SL (Full-FDF) The ORD-ACL model was the best in many
+cases, and the VS-SL model was better when ntrawas large. This is thought due to the unimodality guarantee
+of these models and the DRs’ unimodality constraint of the ORD-ACL model.
+For further details of the experimental results, refer to Appendix C.
+7 Conclusion
+In this paper, we pointed out that previous unimodal BIN and POI models have a weak representation ability
+from the perspective of the DRs’ unimodality constraint, scale, skewness, and FDF, and then developed
+more representable unimodal ORD-ACL and VS-SL models as well as their PO-constrained version and
+OH-extension. In our experiments, 1-FDF or 2-FDF OH models worked better when the training sample
+size was small, and full-FDF ORD-ACL and VS-SL models worked better than low-FDF unimodal models
+when the training sample size was large. Also, full-FDF ORD-ACL and VS-SL models were better than
+full-FDF models with no unimodality guarantee, due to their unimodality guarantee reasonable for many
+real-world data that were almost unimodal.
+Finally, we have to mention one caution, for future research. We did not encounter non-unimodal ordinal
+data in this study, but not all ordinal data would be almost-unimodal. If you feel that the data you are
+interested in have a natural ordinal relation and consider to apply unimodal likelihood models, it would be
+better to ﬁrst test the unimodality of the data as we did with the MU in our experiments. As is obvious,
+unimodal likelihood models would not work well if the data do not tend unimodal.
+Acknowledgments
+This work was supported by Grant-in-Aid for JSPS Fellows, Number 20J23367.
+References
+Shivani Agarwal. Generalization bounds for some ordinal regression algorithms. In International Conference
+on Algorithmic Learning Theory , pp. 7–21, 2008.
+Alan Agresti. Analysis of Ordinal Categorical Data , volume 656. John Wiley & Sons, 2010.
+John A Anderson. Regression and ordered categorical variables. Journal of the Royal Statistical Society:
+Series B (Methodological) , 46(1):1–22, 1984.
+David Andrich. A rating formulation for ordered response categories. Psychometrika , 43(4):561–573, 1978.
+Anonymous. Modiﬁed threshold method for ordinal regression. Submitted to Transactions on Machine
+Learning Research , 2022. URL https://openreview.net/forum?id=PInXz6Gasv . Under review.
+Christopher Beckham and Christopher Pal. Unimodal probability distributions for deep ordinal classiﬁcation.
+InInternational Conference on Machine Learning , pp. 411–419, 2017.
+Ana M Bianco and Victor J Yohai. Robust estimation in the logistic regression model. In Robust Statistics,
+Data Analysis, and Computer Intensive Methods , pp. 17–34. 1996.
+Paul-Christian Bürkner and Matti Vuorre. Ordinal regression models in psychology: A tutorial. Advances
+in Methods and Practices in Psychological Science , 2(1):77–101, 2019.
+Wenzhi Cao, Vahid Mirjalili, and Sebastian Raschka. Consistent rank logits for ordinal regression with
+convolutional neural networks. arXiv preprint arXiv:1901.07884 , 6, 2019.
+15Published in Transactions on Machine Learning Research (10/2022)
+Chuansheng Chen, Shin-Ying Lee, and Harold W Stevenson. Response style and cross-cultural comparisons
+of rating scales among east asian and north american students. Psychological Science , 6(3):170–175, 1995.
+Christophe Croux, Gentiane Haesbroeck, and Christel Ruwet. Robust estimation for ordinal regression.
+Journal of Statistical Planning and Inference , 143(9):1486–1499, 2013.
+Joaquim F Pinto da Costa, Hugo Alonso, and Jaime S Cardoso. The unimodal model for the classiﬁcation
+of ordinal data. Neural Networks , 21(1):78–91, 2008.
+Leo A Goodman. Simple models for the analysis of association in cross-classiﬁcations having ordered cate-
+gories. Journal of the American Statistical Association , 74(367):537–552, 1979.
+Pedro Antonio Gutierrez, Maria Perez-Ortiz, Javier Sanchez-Monedero, Francisco Fernandez-Navarro, and
+Cesar Hervas-Martinez. Ordinal regression methods: survey and experimental study. IEEE Transactions
+on Knowledge and Data Engineering , 28(1):127–146, 2015.
+Maria Iannario and Domenico Piccolo. Cub models: Statistical methods and empirical evidence. Modern
+Analysis of Customer Surveys: with Applications using R , pp. 231–258, 2011.
+Rob Kaas and Jan M Buhrman. Mean, median and mode in binomial distributions. Statistica Neerlandica ,
+34(1):13–18, 1980.
+Kyoung-Jae Kim and Hyunchul Ahn. A corporate credit rating model using multi-class support vector
+machines with an ordinal pairwise partitioning approach. Computers & Operations Research , 39(8):1800–
+1811, 2012.
+Tie-Yan Liu. Learning to Rank for Information Retrieval . Springer Science & Business Media, 2011.
+Geoﬀ N Masters. A rasch model for partial credit scoring. Psychometrika , 47(2):149–174, 1982.
+Peter McCullagh. Regression models for ordinal data. Journal of the Royal Statistical Society: Series B
+(Methodological) , 42(2):109–127, 1980.
+Zhenxing Niu, Mo Zhou, Le Wang, Xinbo Gao, and Gang Hua. Ordinal regression with multiple output cnn
+for age estimation. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,
+pp. 4920–4928, 2016.
+Domenico Piccolo. On the moments of a mixture of uniform and shifted binomial random variables. Quaderni
+di Statistica , 5(1):85–104, 2003.
+Gary Simon. Alternative analyses for the singly-ordered contingency table. Journal of the American Statis-
+tical Association , 69(348):971–976, 1974.
+Shipeng Yu, Kai Yu, Volker Tresp, and Hans-Peter Kriegel. Collaborative ordinal regression. In Proceedings
+of the International Conference on Machine Learning , pp. 1089–1096, 2006.
+A Proof of Theorems in Main Part
+BIN and OH-BIN We ﬁrst prove Theorem 1about properties of the BIN and OH-BIN models:
+Proof of Theorem 1.First, we prove Theorem 1(i): Letting p=1
+1+e−u, one has that
+Pbin(y+1;u,s)
+Pbin(y;u,s)=elog(Pb(y+1;p))/s
+ÍK
+k=1elog(Pb(k;p))/selog(Pb(y;p))/s
+ÍK
+k=1elog(Pb(k;p))/s=e{log(Pb(y+1;p))−log(Pb(y;p))}/s
+=e{log((K−1)!
+y!(K−y−1)!py(1−p)K−y−1)−log((K−1)!
+(y−1)!(K−y)!py−1(1−p)K−y)}/s=(K−y)p
+y(1−p)1/s
+.(21)
+16Published in Transactions on Machine Learning Research (10/2022)
+Next, we prove Theorem 1(ii) and ( iii): Let r(y,p)B(K−y)p
+y(1−p)so thatPbin(y+1;u,s)
+Pbin(y;u,s)={r(y,p)}1/s. (6) shows
+max{1,Kp} ≤ M((Pb(k;p))k∈[K]) ≤min{Kp+1,K}with p=1
+1+e−u. Since (Pb(k;p))k∈[K]=(Pbin(y;u,1))y∈[K]
+and the scaling factor does not change the mode, one has that max{1,Kp} ≤ m=M((Pbin(y;u,s))y∈[K]) ≤
+min{Kp+1,K}. This implies Kp≤m≤Kp+1(or equivalently (m−1)/K≤p≤m/K). Since r(y,p)is
+decreasing in y∈ [K−1]and increasing in p∈ (0,1), one has that
+r(y,p)=(K−y)p
+y(1−p)≥(K−y)p
+y(1−p)
+y=m−1,p=(m−1)/K=1fory=1, . . . , m−1,
+r(y,p)=(K−y)p
+y(1−p)≤(K−y)p
+y(1−p)
+y=m,p=m/K=1fory=m, . . . , K−1,(22)
+i.e., Theorem 1(ii). Also, these results and the fact that r(y,p)is decreasing in y∈ [K−1]prove that
+r(1,p)−1≤r(2,p)−1≤ · · · ≤ r(m−1,p)−1≤1,and 1≥r(m,p) ≥r(m+1,p) ≥ · · · ≥ r(K−1,p), (23)
+which imply Theorem 1(iii). □
+ACL and ORD-ACL and their PO and OH versions We next provide proofs of Theorems 2,3, and
+4about properties of the ACL and ORD-ACL models and their PO and OH versions:
+Proof of Theorem 2.The construction of the ACL model trivially shows {p:Rd→ ¯∆K−1} ⊇
+{(Pacl(y;g(·))) y∈[K]|g:Rd→RK−1}, namely, that (Pacl(y;g(x)))y∈[K]∈¯∆K−1for any g:Rd→RK−1
+andx∈Rd. Thus, we here show {p:Rd→¯∆K−1} ⊆ {( Pacl(y;g(·))) y∈[K]|g:Rd→RK−1}, namely, that
+there exists g:Rd→RK−1such that p(·)=(Pacl(y;g(·))) y∈[K]for any p:Rd→¯∆K−1. Considering the
+proportional expression
+p1(x):p2(x):· · ·:pK(x)=Pacl(1;g(x)):Pacl(2;g(x)):· · ·:Pacl(K;g(x))
+=e−Í1−1
+l=1gl(x):e−Í2−1
+l=1gl(x):· · ·:e−ÍK−1
+l=1gl(x),(24)
+we can ﬁnd that the equation p(·)=(Pacl(y;g(·))) y∈[K]is satisﬁed by using gsuch that
+gk(x)=logpk(x)
+pk+1(x)∈Rfork=1, . . . , K−1. (25)
+This concludes the proof. □
+Proof of Theorem 3.First, Theorem 3(i) is proved by
+Pacl(y+1;u)
+Pacl(y;u)=Îy
+l=1e−ul
+ÍK
+k=1Îk−1
+l=1e−ul Îy−1
+l=1e−ul
+ÍK
+k=1Îk−1
+l=1e−ul=Îy
+l=1e−ul
+Îy−1
+l=1e−ul=e−uy. (26)
+Next, we prove Theorem 3(ii) and ( iii): Under the assumption that u0(B−∞) ≤ · · · ≤ um−1≤0≤um≤
+· · · ≤ uK(B∞)for some m∈ [K], one has that
+Pacl(1;u)
+Pacl(2;u)=eu1≤Pacl(2;u)
+Pacl(3;u)=eu2≤ · · · ≤Pacl(m−1;u)
+Pacl(m;u)=eum−1≤1,
+1≥Pacl(m+1;u)
+Pacl(m;u)=e−um≥Pacl(m+2;u)
+Pacl(m+1;u)=e−um+1≥ · · · ≥Pacl(K;u)
+Pacl(K−1;u)=e−uK−1.(27)
+These results show Theorem 3(ii) and ( iii). □
+Proof of Theorem 4.Theorem 3and the fact that ´g=ρ[g]is ordered ( ´g1(x) ≤ · · · ≤ ´gK−1(x)for any x∈
+Rd) show ‘left-hand side of ( 14)’⊆‘right-hand side of ( 14)’. Thus, we here show ‘left-hand side of ( 14)’⊇
+17Published in Transactions on Machine Learning Research (10/2022)
+‘right-hand side of ( 14)’, namely, that there exists g:Rd→RK−1such that p(·)=(Pacl(y;´g(·))) y∈[K]with
+´g=ρ[g]for any p∈‘right-hand side of ( 14)’. Considering the proportional expression
+p1(x):p2(x):· · ·:pK(x)=Pacl(1;´g(x)):Pacl(2;´g(x)):· · ·:Pacl(K;´g(x))
+=e−Í1−1
+l=1´gl(x):e−Í2−1
+l=1´gl(x):· · ·:e−ÍK−1
+l=1´gl(x),(28)
+we can ﬁnd that the equation p(·)=(Pacl(y;´g(·))) y∈[K]is satisﬁed by using gsuch that
+g1(x)=´g1(x)=logp1(x)
+p2(x)∈R,
+ρ(gk(x))=´gk(x) −´gk−1(x)=logpk(x)
+pk+1(x)−logpk−1(x)
+pk(x)fork=2, . . . , K−1.(29)
+The question here is whether there exists gk:Rd→Rsatisfying the latter half of ( 29). The DRs’ unimodality
+shows thatpk−1(x)
+pk(x)≤pk(x)
+pk+1(x). Thus, logpk(x)
+pk+1(x)−logpk−1(x)
+pk(x)∈ [0,∞), and there exists gk:Rd→Rsatisfying
+the latter half of ( 29) for a non-negative function ρsatisfying ( 13). This concludes the proof. □
+SL and VS-SL and their PO and OH versions We ﬁnally provide proofs of Theorems 5,6, and 7
+about properties of the SL, VS-SL, and PO- and OH-VS-SL models:
+Proof of Theorem 5.The equation (Psl(y;g(x)))y∈[K]=(Psl(y;g(x)+c·1))y∈[K],c∈Rshows the former
+equation of ( 17). We thus prove the latter equation of ( 17) below. The construction of the SL model
+trivially shows {p:Rd→¯∆K−1} ⊇ {( Psl(y;g(·))) y∈[K]|g:Rd→RK}, namely, that (Psl(y;g(x)))y∈[K]∈¯∆K−1
+for any g:Rd→RKandx∈Rd. Thus, we here show {p:Rd→¯∆K−1} ⊆ {( Psl(y;g(·))) y∈[K]|g:Rd→RK},
+namely, that there exists g:Rd→RKsuch that p(·)=(Psl(y;g(·))) y∈[K]for any p:Rd→¯∆K−1. Considering
+the proportional expression
+p1(x):p2(x):· · ·:pK(x)=Psl(1;g(x)):Psl(2;g(x)):· · ·:Psl(K;g(x))=e−g1(x):e−g2(x):· · ·:e−gK(x),(30)
+we can ﬁnd that the equation p(·)=(Psl(y;g(·))) y∈[K]is satisﬁed by using gsuch that
+gk(x)=−logpk(x) ∈Rfork=1, . . . , K−1. (31)
+This concludes the proof. □
+The ﬁrst equation of ( 17) suggests that the presence or absence of the constraint g1(·)=0in the SL model
+is not related to the representation ability of the SL model. So we adopt the formulation of the SL model
+without the constraint g1(·)=0in the following.
+Proof of Theorem 6.Theorem 6would be trivial. We omit the proof. □
+Proof of Theorem 7.Theorem 6and the fact that ˇg=τ(ρ[g])is V-shaped (there exists m(x) ∈ [ K]such
+that ˇg1(x) ≥ · · · ≥ ˇgm(x)(x)and ˇgm(x)(x) ≤ · · · ≤ ˇgK(x)for any x∈Rd) show ‘left-hand side of ( 19)’⊆
+‘right-hand side of ( 19)’. Thus, we here show ‘left-hand side of ( 19)’⊇‘right-hand side of ( 19)’, namely,
+that there exists g:Rd→RKsuch that p(·)=(Pacl(y;´g(·))) y∈[K]for any p∈‘right-hand side of ( 19)’.
+Considering the proportional expression
+p1(x):p2(x):· · ·:pK(x)=Psl(1;ˇg(x)):Psl(2;ˇg(x)):· · ·:Psl(K;ˇg(x))=e−ˇg1(x):e−ˇg2(x):· · ·:e−ˇgK(x),(32)
+we can ﬁnd that the equation p(·)=(Psl(y;ˇg(·))) y∈[K]is satisﬁed by using gsuch that
+τ(´gk+1(x)) − τ(´gk(x))=(
+τ(g1(x)+ρ(g2(x))) − τ(g1(x))=logp1(x)
+p2(x), k=1,
+τ(´gk(x)+ρ(gk+1(x))) − τ(´gk(x))=logpk(x)
+pk+1(x),k=2, . . . , K−1.(33)
+18Published in Transactions on Machine Learning Research (10/2022)
+For simplicity, let ´gM(p(x))(x)=0(which is achievable for the VS-SL model). Since ρis non-negative and
+τ(u)is continuous and non-increasing in u<0, one has that {τ(c) −τ(c−ρ(u)) |u∈R}={τ(c) −τ(c−v) |
+v≥0}=(−∞ ,0] ∋logpM(p(x))−1(x)
+pM(p(x))(x)(≤0)(here c=´gM(p(x))(x)), which implies that there exists gM(p(x))(x)
+satisfying ( 33). By repeating the same argument, one can also prove the existence of g1(x), . . . , gM(p(x))−1(x)
+satisfying ( 33). Since ρis non-negative and τ(u)is continuous and non-decreasing in u>0, one has that
+{τ(c+ρ(u)) − τ(c) |u∈R}={τ(c+v) −τ(c) |v≥0}=[0,∞) ∋ logpM(p(x))(x)
+pM(p(x))+1(x)(≥0)(here c=´gM(p(x))(x)),
+which implies that there exists gM(p(x))+1(x)satisfying ( 33). By repeating the same argument, one can also
+prove the existence of gM(p(x))+2(x), . . . , gK(x)satisfying ( 33). This concludes the proof. □
+B Theorems on Relationship among Likelihood Models and their Proof
+We here provide theorems on relationships among likelihood models, which are shown in Figure 1. Many of
+the theorems are direct corollaries of Theorems 1–7.
+ACL =SL Theorems 2and5show the following theorem:
+Theorem 8. The ACL and SL models have an equivalent representation ability in the formal sense: it holds
+that
+{(Pacl(y;g(·))) y∈[K]|g:Rd→RK−1}={(Psl(y;g(·))) y∈[K]|g:Rd→RK}. (34)
+Proof of Theorem 8.This theorem is a direct corollary of Theorems 2and5. □
+VS-SL ⊆SL and ACL The following theorem would be trivial from Theorems 2,5, and 7:
+Theorem 9. The VS-SL model has a weak representation ability in the formal sense than the ACL and SL
+models: for any functions ρsatisfying (13)and τsatisfying (18), it holds that
+{(Psl(y;τ(ρ[g(·)]))) y∈[K]|g:Rd→RK} ⊆ {( Pacl(y;g(·))) y∈[K]|g:Rd→RK−1}, (35)
+{(Psl(y;τ(ρ[g(·)]))) y∈[K]|g:Rd→RK} ⊆ {( Psl(y;g(·))) y∈[K]|g:Rd→RK}. (36)
+Proof of Theorem 9.The trivial result, (Psl(y;τ(ρ[g(x)]))) y∈[K]∈¯∆K−1, and Theorems 2,5, and 7prove this
+theorem. □
+ORD-ACL ⊆VS-SL Theorems 4and7show the following theorem:
+Theorem 10. The ORD-ACL model has a weak representation ability in the formal sense than the VS-SL
+model: for any functions ρsatisfying (13)and τsatisfying (18), it holds that
+{(Pacl(y;ρ[g(·)])) y∈[K]|g:Rd→RK−1} ⊆ {( Psl(y;τ(ρ[g(·)]))) y∈[K]|g:Rd→RK}. (37)
+Proof of Theorem 10.Since p∈¯∆K−1satisﬁes
+(p1
+p2, . . . ,pM(p)−1
+pM(p),pM(p)+1
+pM(p), . . . ,pK
+pK−1)is unimodal ⇒pis unimodal , (38)
+Theorems 4and7show this theorem. □
+OH-BIN ⊆ORD-ACL Theorems 1and4show the following theorem:
+Theorem 11. The OH-BIN model has a weak representation ability in the formal sense than the ORD-ACL
+model: for any function ρsatisfying (13), it holds that
+{(Pbin(y;g(·),s(·))) y∈[K]|g:Rd→R,s:Rd→ (0,∞)} ⊆ {( Pacl(y;ρ[g(·)])) y∈[K]|g:Rd→RK−1}. (39)
+Proof of Theorem 11.Theorem 1(iii) shows that an instance of the OH-BIN model has the DRs’ unimodality
+constraint, and Theorem 4shows that the ORD-ACL model can represent arbitrary CPD with the DRs’
+unimodality constraint. According to these results, this theorem is proved. □
+19Published in Transactions on Machine Learning Research (10/2022)
+OH-ORD-ACL ⊆ORD-ACL Theorems 3and4show the following theorem:
+Theorem 12. The OH-ORD-ACL model has a weak representation ability in the formal sense than the
+ORD-ACL model: for any function ρsatisfying (13), it holds that
+{(Pacl(y;{ρ[b] −g(·) ·1}/s(·))) y∈[K]|b∈RK−1,g:Rd→R,s:Rd→ (0,∞)}
+⊆ {(Pacl(y;ρ[g(·)])) y∈[K]|g:Rd→RK−1}.(40)
+Proof of Theorem 12.Theorem 3(iii) shows that an instance of the OH-ORD-ACL model has the DRs’
+unimodality constraint since {ρ[b] −g(·) ·1}/s(·)is ordered, and Theorem 4shows that the ORD-ACL model
+can represent arbitrary CPD with the DRs’ unimodality constraint. These results prove this theorem. □
+OH-VS-SL ⊆VS-SL Theorems 6and7show the following theorem:
+Theorem 13. The OH-VS-SL model has a weak representation ability in the formal sense than the VS-SL
+model: for any functions ρsatisfying (13)and τsatisfying (18), it holds that
+{(Psl(y;τ(ρ[b] −g(·) ·1)/s(·))) y∈[K]|b∈RK,g:Rd→R,s:Rd→ (0,∞)}
+⊆ {(Psl(y;τ(ρ[g(·)]))) y∈[K]|g:Rd→RK}.(41)
+Proof of Theorem 13.Theorem 6shows that an instance of the OH-VS-SL model is unimodal since τ(ρ[b] −
+g(·)·1)/s(·)is V-shaped, and Theorem 7shows that the VS-SL model can represent arbitrary unimodal CPD.
+According to these results, this theorem is proved. □
+BIN ⊆OH-BIN, etc. The following theorem would be trivial:
+Theorem 14. For any functions ρsatisfying (13)and τsatisfying (18), it holds that
+•The BIN model has a weak representation ability in the formal sense than the OH-BIN model:
+{(Pbin(y;g(·),s))y∈[K]|g:Rd→R,s∈ (0,∞)}
+⊆ {(Pbin(y;g(·),s(·))) y∈[K]|g:Rd→R,s:Rd→ (0,∞)}.(42)
+•The POI model has a weak representation ability in the formal sense than the OH-POI model:
+{(Ppoi(y;g(·),s))y∈[K]|g:Rd→R,s∈ (0,∞)}
+⊆ {(Ppoi(y;g(·),s(·))) y∈[K]|g:Rd→R,s:Rd→ (0,∞)}.(43)
+•The PO-ORD-ACL model has a weak representation ability in the formal sense than the OH-ORD-
+ACL model:
+{(Pacl(y;ρ[b] −g(·) ·1))y∈[K]|b∈RK−1,g:Rd→R}
+⊆ {(Pacl(y;{ρ[b] −g(·) ·1}/s(·))) y∈[K]|b∈RK−1,g:Rd→R,s:Rd→ (0,∞)}.(44)
+•The PO-VS-SL model has a weak representation ability in the formal sense than the OH-VS-SL
+model:
+{(Psl(y;τ(ρ[b] −g(·) ·1)))y∈[K]|b∈RK,g:Rd→R}
+⊆ {(Psl(y;τ(ρ[b] −g(·) ·1)/s(·))) y∈[K]|b∈RK,g:Rd→R,s:Rd→ (0,∞)}.(45)
+Proof of Theorem 14.The BIN, POI, PO-ORD-ACL, and PO-VS-SL models are respectively a special in-
+stance of the OH-BIN, OH-POI, OH-ORD-ACL, and OH-VS-SL models with ﬁxing s(x)to ax-independent
+constant ( sor 1). □
+20Published in Transactions on Machine Learning Research (10/2022)
+POI ⊆PO-ORD-ACL, etc. The following theorem formalizes ( 20), and show the relationship between
+POI and PO-ORD-ACL models and its OH version.
+Theorem 15. (20)holds. Also, for any function ρsatisfying (13), it holds that
+•The POI model has a weak representation ability in the formal sense than the PO-ORD-ACL model:
+{(Ppoi(y;g(·),s))y∈[K]|g:Rd→R,s∈ (0,∞)}
+⊆ {(Pacl(y;ρ[b] −g(·) ·1))y∈[K]|b∈RK−1,g:Rd→R}.(46)
+•The OH-POI model has a weak representation ability in the formal sense than the OH-ORD-ACL
+model:
+{(Ppoi(y;g(·),s(·))) y∈[K]|g:Rd→R,s:Rd→ (0,∞)}
+⊆ {(Pacl(y;{ρ[b] −g(·) ·1}/s(·))) y∈[K]|b∈RK−1,g:Rd→R,s:Rd→ (0,∞)}.(47)
+Proof of Theorem 15.Forb=(bk)k∈[K−1]satisfying bk=log(k)/sfork=1, . . . , K−1,v=log(u)/s, and
+w=(wk)k∈[K−1]=b−v·1, one has that
+Pacl(y;w)=Îy−1
+l=1e−wl
+ÍK
+k=1Îk−1
+l=1e−wl=e−Íy−1
+l=1{log(l)−log(u)}/s
+ÍK
+k=1e−Ík−1
+l=1{log(l)−log(u)}/s=e{(y−1)log(u)−log((y−1)!)}/s
+ÍK
+k=1e{(k−1)log(u)−log((k−1)!)}/s, (48)
+which is equal to Ppoi(y;u,s)in (8). This proves ( 20). Also, since (log(k)/s)k∈[K−1]is ordered, ( 20) proves
+the latter results. □
+C Supplement of Experimental Results
+We here show details of the experimental results. Figures 7,8,9, and 10respectively show errorbar-plots of
+mean and STD of the test NLLs, MZEs, MAEs, MSEs for all methods and datasets.
+21Published in Transactions on Machine Learning Research (10/2022)
+Figure 7: Errorbar-plots of mean and STD of the test NLLs of all methods for each dataset.
+22Published in Transactions on Machine Learning Research (10/2022)
+Figure 8: Errorbar-plots of mean and STD of the test MZEs of all methods for each dataset.
+23Published in Transactions on Machine Learning Research (10/2022)
+Figure 9: Errorbar-plots of mean and STD of the test MAEs of all methods for each dataset.
+24Published in Transactions on Machine Learning Research (10/2022)
+Figure 10: Errorbar-plots of mean and STD of the test MSEs of all methods for each dataset.
+25

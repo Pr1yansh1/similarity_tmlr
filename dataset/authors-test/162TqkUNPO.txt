@@ -1,0 +1,3983 @@
+Under review as submission to TMLR
+Comparative Generalization Bounds for Deep Neural Net-
+works
+Anonymous authors
+Paper under double-blind review
+Abstract
+In this work, we investigate the generalization capabilities of deep neural networks. We
+introduce a measure of the effective depth of neural networks, defined as the first layer at
+which sample embeddings are separable using the nearest-class center classifier. Our em-
+pirical results demonstrate that, in standard classification settings, neural networks trained
+using Stochastic Gradient Descent tend to have small effective depths. We also explore the
+relationship between effective depth, the complexity of the training dataset, and generaliza-
+tion. For instance, we find that the effective depth of a trained neural network increases as
+the number of random labels in the data increases. Additionally, we derive a generalization
+bound by comparing the effective depth of a network with the minimal depth required to fit
+the same dataset with partially corrupted labels. This bound provides non-vacuous predic-
+tions of test performance and is found to be independent of the actual depth of the network
+in our experiments.
+1 Introduction
+Deep learning systems have steadily advanced the state of the art in a wide range of benchmarks, demon-
+strating impressive performance in tasks ranging from image classification (Taigman et al., 2014; Zhai et al.,
+2021), language processing (Devlin et al., 2019; Brown et al., 2020), open-ended environments (Silver et al.,
+2016; Arulkumaran et al., 2019), to coding (Chen et al., 2021).
+Recent research suggests that deep neural networks are able to generalize well to new data because they have
+a large number of parameters relative to the number of training samples (Belkin et al., 2018; Belkin, 2021;
+Advani & Saxe, 2017; Belkin et al., 2019). However, it has been shown that in these cases deep learning
+models can also precisely interpolate arbitrary training labels (Zhang et al., 2017), a phenomenon known
+as the “interpolation regime.” Understanding how deep learning models learn through interpolation is an
+important step towards a more comprehensive theoretical understanding of their successes.
+Traditional generalization bounds (Vapnik, 1998; Shalev-Shwartz & Ben-David, 2014; Mohri et al., 2012;
+Bartlett & Mendelson, 2003) are based on uniform convergence and are used to control the worst-case gener-
+alization gap (the difference between train and test errors) over a set of predictors that includes the outputs
+of a learning algorithm. However, the applicability of these bounds to certain interpolation learning regimes
+has been called into question by Nagarajan & Kolter (2019), who described theoretical scenarios where an
+interpolation learning algorithm generalizes well but a uniform convergence bound cannot detect this. Sub-
+sequent research by Bartlett & Long (2021); Zhou et al. (2020); Negrea et al. (2020); Yang et al. (2021) has
+also demonstrated the limitations of uniform convergence in various interpolation learning situations.
+Contributions. In this paper, we present a novel approach for measuring generalization in deep learning
+that does not rely on uniform convergence bounds. Instead, our bound suggests that a model will perform
+well at test time if its complexity is small compared to the complexity of a network required to fit the same
+dataset with partially random labels. In other words, even if a trained network has a complexity greater
+than the number of training samples, it may still be less complex than a model that fits partially random
+labels. As a result, in such cases, our bound may provide a non-trivial estimate of the test error.
+1Under review as submission to TMLR
+Dataset MNIST Fashion MNIST CIFAR10 CIFAR10
+Architecture CONV-L-50 CONV-L-100 CONV-L-100 CONVRES- L-50
+Depth (L) 10 12 15 10 12 15 16 18 20 10 12 15
+Test error 0.0075 0.0074 0.0074 0.0996 0.0996 0.0996 0.2659 0.2653 0.2648 0.2903 0.2862 0.2804
+p 0.1 0.1 0.1 0.2 0.2 0.2 0.4 0.4 0.4 0.4 0.4 0.4
+Our bound 0.1 0.1 0.1 0.2 0.2 0.2 0.66 0.66 0.53 0.4 0.4 0.4
+L1,∞(Bartlett & Mendelson, 2003) 8.911e+14 1.74e+17 2.13e+22 3.613e+17 9.145e+18 4.088e+22 1.076e+23 6.682e+28 2.758e+35 - - -
+L3,1.5(Neyshabur et al., 2015) 5.462e+05 1.6e+06 1.308e+06 7.523e+07 6.997e+07 2.636e+08 4.633e+08 2.275e+09 5.061e+09 - - -
+Frobenius (Neyshabur et al., 2015) 1.848e+06 8.194e+06 2.216e+07 2.486e+08 2.335e+08 1.585e+09 1.967e+09 1.442e+10 3.038e+11 - - -
+SpecL1(Bartlett et al., 2017) 2.861e+05 6.412e+05 9.566e+05 4.706e+06 3.516e+06 3.176e+06 1.19e+07 1.449e+08 1.272e+10 - - -
+Spec Frob (Neyshabur et al., 2019) 3.948e+03 1.1199e+04 1.538e+04 4.0229e+04 2.884e+04 2.543e+04 9.4833e+04 1.011e+06 1.033e+08 - - -
+Table 1:Comparing our bound with baseline bounds in the literature for networks of varying
+depths. Our error bound is reported in the fourth row, and the baseline bounds are reported in the bottom
+rectangle. While the test error is universally bounded by 1, the baseline bounds are much larger than 1, and
+therefore, are meaningless. In contrast, our bound achieves relatively tight estimations of the test
+error and unlike the baseline bounds, our bound is fairly unaffected by the network’s depth.
+To formally describe our notion of complexity, we use the concept of nearest class-center (NCC) separability.
+This property states that the feature embeddings associated with training samples belonging to the same
+classcanbeseparatedusingthenearestclass-centerdecisionrule. Whileearlierresearch(Papyanetal.,2020)
+found that NCC separability occurs at the penultimate layer of trained networks, more recent research (Ben-
+Shaul & Dekel, 2022) has discovered NCC separability in intermediate layers as well. In this work, we
+introduce the concept of “effective depth” in neural networks, which refers to the lowest layer at which the
+features are NCC separable (see Sec. 3.2).
+We have made several key observations about effective depths. First, we have found that the effective depth
+of trained networks increases as the amount of random labels in the data increases. Second, when training
+deepnetworks, wehaveobservedthattheytendtoconvergetoaneffectivedepth L0, regardlessoftheiractual
+depthL. This means that the feature embeddings of layers above L0tend to be NCC separable. In addition,
+we have shown in Tab. 1 that our bound on generalization is empirical, non-vacuous, and independent of
+depth, unlike traditional bounds. In Section 3.3 we further discuss the limitations of modern norm-based
+generalization bounds (e.g., Neyshabur et al. (2015); Bartlett et al. (2017); Golowich et al. (2017); Neyshabur
+et al. (2018)), along with the key distinctions between these bounds and the proposed bound.
+1.1 Additional Related Work
+There has been significant research on the geometrical properties of intermediate layers in deep neural
+networks, such as clustering and separability (Papyan, 2020; Tirer & Bruna, 2022; Galanti et al., 2022;
+Ben-Shaul & Dekel, 2022; Cohen et al., 2018; Alain & Bengio, 2017; Montavon et al., 2011; Papyan et al.,
+2017; Ben-Shaul & Dekel, 2021; Shwartz-Ziv & Tishby, 2017). While previous studies have analyzed these
+properties theoretically (Zhu et al., 2021; Rangamani et al., 2022; Lu & Steinerberger, 2020; Fang et al., 2021;
+Ergen & Pilanci, 2021), their specific role in deep learning and potential relationship with generalization
+are not yet fully understood. We focus on the question of whether these properties are good indicator
+of generalization. In contrast, previous research (Zhu et al., 2021) has shown that such properties may
+occur even when training a network with random labels, suggesting that they may not directly indicate
+generalization. In this paper, we argue that effective depth can be used to measure the complexity of fitting
+a dataset, and show how this idea can help us predict test performance.
+2 Problem Setup
+In this section, we explain the learning setting used in our theory and experiments. We focus on the task of
+trainingamodelforstandardmulti-classclassification. Specifically, weconsideradistribution Poversamples
+(x,y)wherexbelongs to the instance space X, andybelongs to the label space YCwith a cardinality of C.
+To simplify, we use one-hot encoding for the label space, where labels are represented by unit vectors in RC,
+andYC={ec|c= 1,...,C}andecis thecth standard unit vector in RC. We also use the notation y=c
+instead ofy=ec. The class conditional distribution of xgiveny=cis denoted as Pc(·) :=P[x∈·|y=c].
+2Under review as submission to TMLR
+Aclassifier hW:X→RCassignsa softlabeltoaninputpoint x∈X, anditsperformanceonthedistribution
+Pis measured by the expected risk
+LP(hW) :=E(x,y(x))∼P[ℓ(hW(x),y(x))],
+whereℓ:RC×YC→[0,∞)is a non-negative loss function (e.g., L2or cross-entropy losses).
+We typically do not have direct access to the full population distribution P. Therefore, we generally aim to
+learn a classifier, h, using some balanced training data S:={(xi,yi)}m
+i=1=∪C
+c=1Sc=∪C
+c=1{xci,yci}m0
+i=1∼
+PB(m)ofm=C·m0samples consisting m0independent and identically distributed (i.i.d.) samples drawn
+fromPcfor eachc∈[C]. Specifically, we intend to find Wthat minimizes the regularized empirical risk
+Lλ
+S(hW) :=1
+mm/summationdisplay
+i=1ℓ(hW(xi),yi) +λ∥W∥2
+2, (1)
+where the regularization controls the complexity of the function hWand typically helps reducing over-
+fitting. Finally, the performance of the trained model is evaluated using the train and test error rates;
+errS(hW) :=1
+m/summationtextm
+i=1I[arg maxchW(xi)c̸=yi]and errP(hW) :=E(x,y)∼P[I[arg maxchW(x)c̸=y]], where
+I:{True,False}→{ 0,1}the indicator function.
+Neural networks. In this work, the classifier hWis a neural network composed of a set of parametric
+layers. It is written as hW:=eWe◦fL
+Wf:=eWe◦gL
+WL◦···◦g1
+W1, wheregi
+Wiare parametric functions that
+map from RpitoRpi+1, andeWeis a linear function that maps from RpL+1toRC. These layers can be
+standard linear or convolutional layers (with ReLU activations) or a residual block. To simplify notation,
+we denotefi:=gi◦···◦g1andh:=hW. The specific architectures used in the experiments are described
+Appendix A.1.
+Optimization. We optimize our models by minimizing the regularized empirical risk Lλ
+S(h)using Stochas-
+tic Gradient Descent (SGD) for a certain number of iterations Twith a regularization coefficient λ>0. To
+do this, we initialize the weights W0=γofhwith a standard initialization procedure and at each iteration,
+updateWt+1←Wt−µt∇WL˜S(ht), whereµt>0is the learning rate at the t-th iteration, and ˜S⊂Sis
+a subset of size Bselected uniformly at random. Throughout the paper, we denote by hγ
+Sthe output of
+the learning algorithm starting from initialization W0=γ. Whenγis not relevant or is obvious from the
+context, we will simply write hγ
+S=hS=eS◦fS.
+3 Neural Collapse and Generalization
+In this section, we examine the theoretical connection between neural collapse and generalization. We begin
+by defining neural collapse, NCC separability, and effective depth of neural networks. We then explore how
+these concepts relate to the test-time performance of neural networks.
+3.1 Nearest Class-Center Separability
+Neural collapse (Papyan et al., 2020) identifies training dynamics of deep networks for standard classification
+tasks, in which the features of the penultimate layer associated with training samples belonging to the same
+class tend to concentrate around their class-means. This includes (NC1) class-features variability collapse,
+(NC2) the class means of the embeddings collapse to the vertices of a simplex equiangular tight frame, (NC3)
+the last-layer classifiers collapse to the class means up to scaling and (NC4) the classifier’s decision collapses
+to simply choosing whichever class has the closest train class mean, while maintaining a zero classification
+error.
+In this paper we focus on a weak form of NC4 we call “nearest class-center separability” (NCC separability).
+Formally, suppose we have a dataset S=∪C
+c=1Scof samples and a mapping f:Rd→Rp, the features of f
+are NCC separable (w.r.t. S) if for alli∈[m], we have ˆh(xi) =yi, where
+ˆh(x) := arg min
+c∈[C]∥f(x)−µf(Sc)∥. (2)
+3Under review as submission to TMLR
+To measure the degree of NCC separability of a feature map f, we use the train and test classification error
+rates of the NCC classifier on top of the given layer, err S(ˆh)and errP(ˆh).
+Essentially, NC4 asserts that during training, the feature embeddings in the penultimate layer become
+separable and the classifier hitself converges to the ‘nearest class-center classifier’ ˆh.
+3.2 Effective Depths and Generalization
+In this section we study the effective depths of neural networks and their connection with generalization.
+To formally define this notion, we focus on neural networks whose Ltop-most layers are of the same size.
+We observe that neural networks trained for standard classification exhibit an implicit bias towards depth
+minimization.
+Observation 1 (Minimal depth hypothesis) .Suppose we have a dataset S. There exists an integer L0≥1,
+such that, if we train a neural network of any depth L≥L0for cross-entropy minimization on Susing SGD
+with weight decay, the learned features flbecome (approximately) NCC separable for all l∈{L0,...,L}.
+We note that if the L0’th layer of fLexhibits NCC separability, we could correctly classify the samples
+already in the L0’th layer of fLusing a linear classifier (i.e., the nearest class-center classifier). Therefore,
+intuitively its depth is effectively upper bounded by L0. The notion of effective depth of a neural network is
+formally defined as follows.
+Definition 1 (ϵ-effective depth) .Suppose we have a dataset Sand a neural network h=e◦gL◦···◦g1with
+g1:Rn→Rp2,gi:Rpi→Rpi+1and linear classifier e:RpL+1→RC. Let ˆhi(x) := arg minc∈[C]∥fi(x)−
+µfi(Sc)∥. Theϵ-effective depth dϵ
+S(h)of the network his the minimal value i∈[L], such that, errS(ˆhi)≤ϵ
+(and dϵ
+S(h) =Lif suchi∈[L]is non-existent).
+To avoid confusion, we note that the ϵ-effective depth is a property of a neural network and not of the
+function it implements. That is, a function can be implemented by two different architectures of different
+effective depths. While our empirical observations in Sec. 4 suggest that the optimizer learns neural networks
+of low-depths, it is not necessarily the lowest depth that allows NCC separability. As a next step, we define
+theϵ-minimal NCC depth . Intuitively, the NCC depth of a given architecture is the minimal value L∈N,
+for which there exists a neural network of depth Lwhose features are NCC separable. As we will show, the
+relationship between the ϵ-effective depth of a neural network and the ϵ-minimal NCC depth is connected
+with generalization.
+Definition 2 (ϵ-Minimal NCC depth) .Suppose we have a dataset S=∪C
+c=1Scand a neural network
+architecture fL=gL◦···◦g1withg1:Rn→Rn0andgi∈G⊂{g′|g′:Rn0→Rn0}for alli= 2,...,L.
+Theϵ-minimal NCC depth of Gis the minimal depth Lfor which there exist parameters W={Wi}L
+i=1, such
+that,f′:=fL
+W=gL
+WL◦···◦g1
+W1satisfies errS(ˆh)≤ϵ, where ˆh(x) := arg minc∈[C]∥f′(x)−µf′(Sc)∥. We
+denote theϵ-minimal NCC depth by dϵ
+min(G,S).
+To study the performance of a given model, we consider the following setup. Let S1={(x1
+i,y1
+i)}m
+i=1and
+S2={(x2
+i,y2
+i)}m
+i=1be two balanced datasets. We think of them as two splits of the training dataset S. We
+assume that the classifier hγ
+S1is trained on S1and we use S2to evaluate its performance. We denote by
+Xj={xj
+i}m
+i=1andYj={yj
+i}m
+i=1the instances and labels in Sj.
+To formally state our bound, we make two technical assumptions. The first is that the misclassified labels
+thathγ
+S1produces over the samples X2=∪C
+c=1{x2
+ci}m0
+i=1are distributed uniformly.
+Definition 3 (δm-uniform mistakes) .We say that the mistakes of a learning algorithm A: (S1,γ)∝⇕⊣√∫⊔≀→hγ
+S1
+areδm-uniform, if with probability ≥1−δmover the selection of S1,S2∼PB(m), the values and indices of
+the mistaken labels of hγ
+S1overX2are uniformly distributed (as a function of γ).
+The above definition provides two conditions regarding the learning algorithm. It assumes that with a
+high probability (over the selection of S1,S2),hγ
+S1makes the same number of mistakes on S2across all
+initializations γ. In addition, it assumes that the mistakes are distributed uniformly across the samples in
+S2and their (incorrect) values are also distributed uniformly. While these assumptions may be violated in
+4Under review as submission to TMLR
+practice, the train error typically has a small variance and the mistakes are almost distributed uniformly
+when the classes are non-hierarchical (e.g., CIFAR10, MNIST).
+For the second assumption, we consider the following term. Let p∈(0,1/2),α∈(0,1), we denote
+δ2
+m,p,α :=PS1,S2,˜Y2,ˆY2/bracketleftig
+∃q≥(1 +α)p:dϵ
+min(G,S1∪˜S2)>EˆY2[dϵ
+min(G,S1∪ˆS2)]/bracketrightig
+, (3)
+where ˜Y2={˜yi}m
+i=1and ˆY2={ˆyi}m
+i=1are uniformly selected to be sets of labels that disagree with Y2on
+pmandqmvalues (resp.) and ˜S2and ˆS2are datasets obtained by replacing the labels of S2with ˜Y2andˆY2
+(resp.). We assume that δ2
+m,p,αis small. Meaning, with a high probability, the minimal depth to fit (2−p)m
+correct labels and pmrandom labels is upper bounded by the expected minimal depth to fit (2−q)mcorrect
+labels andqmrandom labels for any q≥(1 +α)p. To understand this assumption, we note that in both
+cases, the model has to fit at least mcorrect labels and pm(orqm) random labels. However, we typically
+need to increase the capacity of the model in order to fit extended amounts of random labels (see Figs. 3).
+Following the setting above, we are prepared to formulate our generalization bound.
+Proposition 1. Letm∈N,p∈(0,1/2),α∈(0,1)andϵ∈(0,1). Assume that the error of the learning
+algorithm is δ1
+m-uniform. Assume that S1,S2∼PB(m). Lethγ
+S1be the output of the learning algorithm given
+access to a dataset S1and initialization γ. Then,
+ES1Eγ[errP(hγ
+S1)]≤PS1,S2,˜Y2/bracketleftbig
+Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)/bracketrightbig
++ (1 +α)p+δ1
+m+δ2
+m,p,α,(4)
+where ˜Y2={˜yi}m
+i=1is uniformly selected to be a set of labels that disagrees with Y2onpmvalues.
+The above proposition provides an upper bound on the expected test error of the classifier hγ
+S1which is
+the term that we would like to bound. The proposition assumes that the mistakes hγ
+S1generates on X2are
+distributed uniformly (with probability ≥1−δ1
+m). To account the likelihood that this assumption fails, our
+bound includes the term δ1
+m, which is assumed to be small.
+Informally, the bound suggests the following idea to evaluate the performance of hγ
+S1. We start with an
+initial guess pm=p∈(0,1/2)of the test error of hγ
+S1. Using this guess, we compare its ϵ-effective depth
+with theϵ-minimal NCC depth dϵ
+min(G,S1∪˜S2)required to NCC separate the samples in S1∪˜S2, where
+˜S2is the result of randomly relabeling pmmofS2’s labels. Intuitively, if the mistakes of hγ
+S1are uniformly
+distributed and its ϵ-effective depth is smaller than dϵ
+min(G,S1∪˜S2), then, we expect hγ
+S1to make at most
+pmmistakes on S2. Therefore, in a sense, the choice of pmserves as a ‘guess’ whether the effective depth
+of a model trained with S1is likely to be smaller than the ϵ-minimal NCC depth required to NCC separate
+the samples in S1∪˜S2.
+Next, we interpret each term separately. The term Eγ[dϵ
+S1(hγ
+S1)]depends on the complexity of the classifica-
+tion problem and the implicit bias of SGD to favor networks of small ϵ-effective depths. In the worst case, if
+SGD does not minimize the ϵ-effective depth or the labels in S1are random (and mis sufficiently large), we
+expect Eγ[dϵ
+S1(hγ
+S1)] =L. On the other hand, dϵ
+min(G,S1∪˜S2)measures the complexity of a task that involves
+fitting a dataset of size 2msamples, where (2−pm)m≥mof the labels are correct and pmmare random
+labels. By decreasing pm, we expect dϵ
+min(G,S1∪˜S2)to decrease, making the first term in the bound larger.
+In addition, if h=e◦fLis a neural network of a fixed width, it is impossible to fit an increasing amount of
+random labels without increasing the depth. Therefore, when pmm−→
+m→∞∞, the dataset S1∪˜S2becomes
+increasingly harder to fit, and we expect dϵ
+min(G,S1∪˜S2)to tend to infinity. If Eγ[dϵ
+S1(hγ
+S1)]is bounded as
+a function of Landmand ifpmm−→
+m→∞∞, we obtain that P[Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)]−→
+m→∞0and
+together with pm−→
+m→∞0, we have ES1[errP(hS1)]≤δ1
+m+δ2
+m,p,α +om(1).
+As a side note, computing the expectation over S1,S2in the bound is impossible, due to the limited access
+of the training data. However, instead, we empirically estimate this term using a set of kpairs (Si
+1,Si
+2)of
+msamples, yielding an additional term that scales as O(1/√
+k)to the bound (see Prop. 2 in the appendix).
+5Under review as submission to TMLR
+3.3 Comparing Prop. 1 with Standard Generalization Bounds
+Classic bounds (e.g., (Vapnik, 1998)) are based on bounding the test error with the sum between the train
+error together with a term O(/radicalbig
+C(H)/m), whereC(H)measures the complexity (e.g., VC dimension) of the
+classH(e.g., neural networks) and mis the number of training samples. However, as discussed in Sec. 1,
+these bounds are vacuous in overparameterized learning regimes (e.g., training ResNet-50 on CIFAR10
+classification). For instance, for VC-dimension based bounds (Vapnik, 1998), C(H)equals the VC-dimension
+of the classHwhich scales with the number of trainable parameters for ReLU networks (Bartlett et al.,
+2019). For example, even though the ResNet-50 architecture generalizes well when trained on CIFAR10, it
+has over 23 million parameters compared to the m= 50000 training samples in the dataset.
+More recently, Neyshabur et al. (2015); Bartlett et al. (2017); Golowich et al. (2017); Neyshabur et al. (2018)
+suggested generalization bounds for neural networks that weakly depend on uniform convergence. In these
+bounds, the class-complexity C(H)is replaced with the individual complexity C(hW)of the function we learn.
+For example, Golowich et al. (2017) proposed bounds that scale with C(hW) =ρ2L, whereLis the depth of
+hWandρmeasures the product of the norms of its weight matrices. However, Nagarajan & Kolter (2019)
+showed that in certain cases unregularized least squares can generalize well even when its norm ρscales as
+Θ(√m)and the bound becomes Θm(1). Furthermore, these bounds tend to be very large in practice (see
+Tab. 8 in (Neyshabur et al., 2019) and Tab. 1) and are negatively correlated with the test performance (Jiang
+et al., 2020). In addition, if the network’s weight matrices’ norms are larger than 1, quantities like ρgrow
+exponentially when Lis varied. As shown in Tab. 1 this is empirically the case.
+Our Prop. 1 offers a different way to measure generalization. Since this bound is not based on uniform
+convergence, it does not require that the network’s complexity would be small in comparison to m; rather,
+the bound guarantees generalization if the network’s effective size is smaller than that of a network that
+fits partially random labels. For instance, when the optimizer has a strong bias towards minimizing the
+effective depth, Eγ[dϵ
+S1(hγ
+S1)]≈dϵ
+min(G,S1)which is by definition upper bounded by dϵ
+min(G,S1∪˜S2). We
+note that dϵ
+min(G,S1∪˜S2)grows to infinity as m→∞(since the network needs to memorize m→∞random
+labels). On the other hand, dϵ
+min(G,S1)is bounded by the depth of a network that approximates the target
+functionyup to an approximation error ϵ(which typically exists due to universal approximation arguments).
+Therefore, for sufficiently large m, we expect to have dϵ
+min(G,S1∪˜S2)>dϵ
+min(G,S1). As we empirically see
+in Sec. 4, the effective depths of SGD-trained networks are usually small.
+Unlike previous bounds, our bound has the advantage of being fairly independent of L. Namely, when the
+minimal depth hypothesis (Obs. 1) holds, we expect Eγ[dϵ
+S1(hγ
+S1)]to be unaffected by the depth Lofhγ
+S1
+(as long as L≥L0). Since dϵ
+min(G,S1∪˜S2)is by definition independent of L, we expect P[Eγ[dϵ
+S1(hγ
+S1)]≥
+dϵ
+min(G,S1∪˜S2)]to be independent of L(whenL≥L0). In Tab. 1 we empirically validate that our bound
+does not grow when increasing L.
+4 Experiments
+In this section, we experimentally analyze the emergence of neural collapse in the intermediate layers of
+neural networks. First, we validate the “Minimal Depth Hypothesis” (Obs. 1). Following that, we look at
+how corrupted labels affect the extent of intermediate layer NCC separability and the ϵ-effective depth. We
+show that as the number of corrupted labels in the data increases, so does the ϵ-effective depth. Finally, using
+the bound in Prop. 1, we provide non-trivial estimates of the test error. In Tab. 1, we empirically compare
+our bound with relevant baselines and show that, unlike other bounds, it achieves non-vacuous estimations
+of the test error. Throughout the experiments, we used Tesla-k80 GPUs for several hundred runs. Each run
+took between 5-20 hours. For additional experiments, see Appendix A. The plots are high-definition pictures
+and are best viewed when zoomed in.
+4.1 Setup
+Training process. We consider k-class classification problems (e.g., CIFAR10) and train multilayered
+neural networks h=e◦fL=e◦gL◦···◦g1:Rn→RCon the corresponding training dataset S. The models
+6Under review as submission to TMLR
+NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+train acc0.981.00
+3 layers 5 layers 8 layersNCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+train acc 0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+train acc 0.981.00
+12 layers 16 layers 20 layers
+Figure 1: Intermediate NCC separability of CONV- L-400 trained on CIFAR10. We plot the NCC
+train accuracy rates of neural networks with varying numbers of layers. Each curve stands for a different
+layer within the network.
+0.02 0.04 0.06 0.08 0.145678Depth 8
+Depth 10
+Depth 12
+Depth 14
+Depth 16
+Depth 18
+Depth 20Effective Depth
+0.02 0.04 0.06 0.08 0.11.522.533.544.5Depth 8
+Depth 10
+Depth 12
+Depth 14
+Depth 16
+Depth 18Effective Depth
+0.02 0.04 0.06 0.08 0.1345678Depth 8
+Depth 10
+Depth 12
+Depth 14
+Depth 16
+Depth 18Effective Depth
+CIFAR10,k= 1
+CONV-L-400Fashion MNIST ,k= 1
+MLP-L-100Fashion MNIST ,k= 1
+CONV−L−100
+0.02 0.04 0.06 0.08 0.145678 Depth 8
+Depth 10
+Depth 12
+Depth 14
+Depth 16
+Depth 18
+Depth 20Effective Depth
+0.02 0.04 0.06 0.08 0.11.522.533.544.5
+Depth 8
+Depth 10
+Depth 12
+Depth 14
+Depth 16
+Depth 18Effective Depth
+0.02 0.04 0.06 0.08 0.1345678Depth 8
+Depth 10
+Depth 12
+Depth 14
+Depth 16
+Depth 18Effective Depth
+CIFAR10,k= 20
+CONV-L-400Fashion MNIST ,k= 20
+MLP-L-100Fashion MNIST ,k= 20
+CONV-L-100
+Figure 2: Averaged ϵ-effective depths over the last few epochs. We plot the ϵ-effective depth (y-axis)
+as a function of ϵ(x-axis). Each line specifies the ϵ-effective depth of a neural network of a certain depth L.
+We show the averaged ϵ-effective depth over the last k= 1,20epochs across 5initializations. The network’s
+architecture, dataset and kare specified below each plot.
+are trained with SGD for cross-entropy loss minimization between its logits and the one-hot encodings of the
+labels. We consistently use batch size 128, learning rate schedule with an initial learning rate 0.1, decayed
+three times by a factor of 0.1at epochs 60, 120, and 160, momentum 0.9and weight decay 5e−4. Each
+model is trained for 500 epochs.
+7Under review as submission to TMLR
+NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00 NCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0%noise 25%noise 75%noise
+Figure 3: Intermediate NCC separability of CONV-10-400 trained on CIFAR10 with partially
+corrupted labels. We plot the NCC train/test accuracy rates of the various layers of a network trained
+with a certain amount of corrupted labels (see titles).
+Dataset MNIST Fashion MNIST CIFAR10 CIFAR10
+Architecture CONV-10-50 CONV-10-100 CONV-16-100 CONVRES-10-50
+ES1,γ[errP(hγ
+S1)] 0.0075 0.0996 0.2676 0.29
+p 0.05 0.075 0.1 0.05 0.15 0.2 0.4 0.45 0.5 0.1 0.4 0.5
+Bound 1.05 0.475 0.11.05 0.75 0.20.66 0.72 0.7 0.4 0.4 0.5
+Table 2: Estimating the bound in Prop. 1. We used ϵ= 0.005to measure the effective depths.
+Architectures. We focused on three types of architectures: (a) MLP- L-HwithLfully-connected layers of
+widthH, (b) CONV- L-HwithL3×3convolutional layers with padding 1, stride 1andHoutput channels
+and (c) a residual convolutional network CONVRES- L-HwithLresidual blocks with two 3×3convolutional
+layers. In each network the layers are interlaced with batch normalization layers and ReLU activations. For
+more details see Appendix A.1.
+Datasets. We consider various datasets: MNIST, Fashion MNIST, and CIFAR10. For CIFAR10 we used
+random cropping, random horizontal flips, and random rotations (by 15kdegrees for kuniformly sampled
+from [24]). All datasets were standardized.
+4.2 Results
+Intermediate neural collapse. To investigate the bias towards depth minimization, we trained several
+CONV-L-400 networks with varying depths on CIFAR10. Each plot in Fig. 1 illustrates the train NCC
+classification accuracy rates for every intermediate layer of a network of a specific depth. We made several
+interesting observations: (i)Networks with eight or more hidden layers display NCC train accuracy rates of
+about 100%in the eighth and higher layers, indicating that they are effectively of depth 7. (ii)The top layer
+embeddings become NCC separable at approximately the same epoch. (iii)The degree of NCC separability
+of intermediate layer iconverges as a function of L. In other words, the degree of NCC separability for each
+layer is more or less the same across all neural networks with a depth of at least 8, regardless of whether the
+layer is at the beginning or the end of the network.
+For additional experiments and repeat results with various architectures and datasets, refer to Figs. 4-13 in
+Appendix A. In these experiments, we also report NCC train and test accuracy rates, along with additional
+8Under review as submission to TMLR
+measures of neural collapse when varying the depth. For instance, in Figs. 4 and 5, we present the outcomes
+with CONVRES- L-500.
+The effect of the depth on the ϵ-effective depth. In Obs. 1 we claimed that the ϵ-effective depth
+is insensitive to the actual depth of the network (once it exceeds a certain threshold). To validate this
+hypothesis we conducted the following experiments. We trained models on MNIST, Fashion MNIST and
+CIFAR10 with varying depth L. In Fig. 2 we plotted the averaged ϵ-effective depths of each network’s last
+k= 1,20epochs as a function of ϵ. We also average the results across 5different weight initializations and
+plot them along with error bar standard deviations. As can be seen, the ϵ-effective depth is almost unaffected
+by the choice of Lfor a givenϵ. Remarkably, for each ϵ, the averaged effective depth varies very little across
+the various networks. Differently said, the ϵ-effective depths of two trained deep networks of different depths
+are more or less the same, validating our Minimal Depth Hypothesis.
+NCC separability with partially corrupted labels. Simply put, Prop. 1 compares the depths required
+to fit correct labels and partially corrupt labels. To better understand the effect of corrupted labels on the
+complexityofthetask, wecomparethe ϵ-effectivedepthsofmodelstrainedwithvaryingamountsofcorrupted
+labels. Namely, we study the degreeof NCC separability in the intermediate layers of neural networks that
+are trained with varying amounts of corrupted labels.
+For this experiment, we trained instances of CONV-10-400 for CIFAR10 classification with 0%,10%and
+75%corrupted labels (e.g., uniformly distributed random labels). We plot the degrees of NCC separation on
+the train and test sets, 1−errS(ˆhi)and1−errP(ˆhi), across the intermediate layers of the neural networks
+during the optimization procedure.
+As can be seen in Fig. 3, when increasing the number of random labels, the degree of NCC separability
+across the intermediate layers tends to decrease. For example, when training with ≥25%corrupted labels,
+the sixth layer’s NCC accuracy rate drops lower than 98%, in comparison with training without corrupted
+labels that gives us >98%accuracy. In particular, the ϵ-effective depth of the former network is 6 while the
+latter’s is 5 when ϵ= 0.02(see Def. 1). This experiment is extended and repeated in a variety of settings in
+Figs. 14-18.
+Estimating the bound in equation 4. We estimate the bound in equation 4 for multiple architectures
+and datasets. In each case we used ϵ= 0.005by default and employed different ‘guesses’ p(see Tab. 2)
+depending on the complexity of the learning task. We report an estimation of the expected test error of
+the models, ES1,γ[errP(hγ
+S1)]and an estimation of the bound for each selection of p. For concrete technical
+details, see Appendix A.
+As can be seen, for appropriate choices of p, we obtained non-trivial estimates of the test performance of the
+models, which is uncommon for standard bounds for deep neural networks. As expected, if the value of pis
+too optimistic (e.g., close to ES1,γ[errP(hγ
+S1)]), then, the first term in the bound tends to be large compared
+toES1,γ[errP(hγ
+S1)]. As predicted, when pis increased, the first term in the bound tends to decrease.
+Comparing our bound with standard generalization bounds. We expect the bound in equation 4
+to be insensitive to depth because the ϵ-effective depth of deep neural networks is insensitive to depth, as
+shown in Fig. 2. We estimated the bound for various models and datasets, including CONV- L-50 trained
+on MNIST and CONV- L-100 trained on Fashion MNIST and CIFAR10, and CONVRES- L-50 trained on
+CIFAR10 with different values of L. The results, shown in Tab. 1, indicate that our bound gives similar
+values for each value of L. We also compared our bound to several norm-based generalization bounds for
+deep networks that can be found in (Bartlett & Mendelson, 2003; Neyshabur et al., 2015; Bartlett et al.,
+2017; Neyshabur et al., 2019) (we used the implementation of Neyshabur et al. (2019) to compute them). We
+found thatour bound outperforms traditional bounds, asit is empirically non-vacuous andfairly independent
+of depth, while traditional bounds are extremely vacuous and rapidly increase with depth. These results
+support our prediction of the superiority of our bound over traditional bounds1.
+1The norm-based generalization bounds could not be calculated for the CONVRES- L-50 architecture, as these bounds are
+not applicable for neural networks incorporating residual connections.
+9Under review as submission to TMLR
+5 Conclusions
+Understanding the ability of SGD to generalize well when training overparameterized neural network is
+attributed as one of the major open problems in deep learning theory (Zhang et al., 2017). In this paper we
+offer a new angle to study the role of depth in deep learning and the connection between neural collapse and
+generalization.
+Our approach involves introducing the concept of effective depth, which identifies the lowest layer that
+exhibits NCC separability. We propose a novel generalization bound that estimates the likelihood that the
+effectivedepthofatrainedneuralnetworkisstrictlysmallerthantheminimaldepthrequiredtoachieveNCC
+separability with partially corrupted labels. As demonstrated empirically, this criterion is a useful predictor
+of generalization. Furthermore, we characterize and empirically demonstrate that when sufficiently deep
+networks are trained, they converge to the same effective depth, implying that our bound is fairly constant
+when the depth is varied.
+10Under review as submission to TMLR
+References
+Madhu S. Advani and Andrew M. Saxe. High-dimensional dynamics of generalization error in neural net-
+works, 2017. URL https://arxiv.org/abs/1710.03667 .
+Guillaume Alain and Yoshua Bengio. Understanding intermediate layers using linear classifier probes. ArXiv,
+abs/1610.01644, 2017.
+Kai Arulkumaran, Antoine Cully, and Julian Togelius. Alphastar: An evolutionary computation perspective,
+2019. URL http://arxiv.org/abs/1902.01724 . cite arxiv:1902.01724.
+Peter L. Bartlett and Philip M. Long. Failures of model-dependent generalization bounds for least-norm in-
+terpolation. Journal of Machine Learning Research , 22(204):1–15, 2021. URL http://jmlr.org/papers/
+v22/20-1164.html .
+PeterL.BartlettandShaharMendelson. Rademacherandgaussiancomplexities: Riskboundsandstructural
+results.J. Mach. Learn. Res. , 3(null):463–482, mar 2003. ISSN 1532-4435.
+Peter L. Bartlett, Dylan J. Foster, and Matus Telgarsky. Spectrally-normalized margin bounds for neural
+networks. In Proceedings of the 31st International Conference on Neural Information Processing Systems ,
+NIPS’17, pp. 6241–6250, Red Hook, NY, USA, 2017. Curran Associates Inc. ISBN 9781510860964.
+Peter L. Bartlett, Nick Harvey, Christopher Liaw, and Abbas Mehrabian. Nearly-tight vc-dimension and
+pseudodimension bounds for piecewise linear neural networks. Journal of Machine Learning Research , 20
+(63):1–17, 2019. URL http://jmlr.org/papers/v20/17-612.html .
+Mikhail Belkin. Fit without fear: remarkable mathematical phenomena of deep learning through the prism
+of interpolation. Acta Numerica , 30:203 – 248, 2021.
+Mikhail Belkin, Siyuan Ma, and Soumik Mandal. To understand deep learning we need to understand kernel
+learning. In Jennifer Dy and Andreas Krause (eds.), Proceedings of the 35th International Conference on
+Machine Learning , volume 80 of Proceedings of Machine Learning Research , pp. 541–549. PMLR, 10–15
+Jul 2018. URL https://proceedings.mlr.press/v80/belkin18a.html .
+Mikhail Belkin, Daniel Hsu, Siyuan Ma, and Soumik Mandal. Reconciling modern machine-learning prac-
+tice and the classical bias–variance trade-off. Proceedings of the National Academy of Sciences , 116(32):
+15849–15854, 2019. doi: 10.1073/pnas.1903070116. URL https://www.pnas.org/doi/abs/10.1073/
+pnas.1903070116 .
+Ido Ben-Shaul and Shai Dekel. Sparsity-probe: Analysis tool for deep learning models. ArXiv,
+abs/2105.06849, 2021.
+Ido Ben-Shaul and Shai Dekel. Nearest class-center simplification through intermediate layers. PMLR, 196:
+37–47, 2022. URL https://proceedings.mlr.press/v196/ben-shaul22a.html .
+TomBrown, BenjaminMann, NickRyder, MelanieSubbiah, JaredDKaplan, PrafullaDhariwal, ArvindNee-
+lakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen
+Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel Ziegler, Jeffrey Wu, Clemens Winter,
+Chris Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christo-
+pher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are
+few-shot learners. In Advances in Neural Information Processing Systems , volume 33, pp. 1877–1901.
+Curran Associates, Inc., 2020.
+Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde de Oliveira Pinto, Jared Kaplan,
+Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, Alex Ray, Raul Puri, Gretchen Krueger,
+Michael Petrov, Heidy Khlaaf, Girish Sastry, Pamela Mishkin, Brooke Chan, Scott Gray, Nick Ryder,
+MikhailPavlov, AletheaPower, LukaszKaiser, MohammadBavarian, ClemensWinter, PhilippeTillet, Fe-
+lipe Petroski Such, Dave Cummings, Matthias Plappert, Fotios Chantzis, Elizabeth Barnes, Ariel Herbert-
+Voss, William Hebgen Guss, Alex Nichol, Alex Paino, Nikolas Tezak, Jie Tang, Igor Babuschkin, Suchir
+11Under review as submission to TMLR
+Balaji, Shantanu Jain, William Saunders, Christopher Hesse, Andrew N. Carr, Jan Leike, Josh Achiam,
+Vedant Misra, Evan Morikawa, Alec Radford, Matthew Knight, Miles Brundage, Mira Murati, Katie
+Mayer, Peter Welinder, Bob McGrew, Dario Amodei, Sam McCandlish, Ilya Sutskever, and Wojciech
+Zaremba. Evaluating large language models trained on code, 2021.
+Gilad Cohen, Guillermo Sapiro, and Raja Giryes. Dnn or k-nn: That is the generalize vs. memorize question,
+2018. URL https://arxiv.org/abs/1805.06822 .
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of deep bidi-
+rectional transformers for language understanding. In Proceedings of the 2019 Conference of the North
+American Chapter of the Association for Computational Linguistics: Human Language Technologies, Vol-
+ume 1 (Long and Short Papers) . Association for Computational Linguistics, jun 2019.
+Tolga Ergen and Mert Pilanci. Revealing the structure of deep neural networks via convex duality. In Marina
+Meila and Tong Zhang (eds.), Proceedings of the 38th International Conference on Machine Learning ,
+volume 139 of Proceedings of Machine Learning Research , pp. 3004–3014. PMLR, 18–24 Jul 2021.
+Cong Fang, Hangfeng He, Qi Long, and Weijie J. Su. Exploring deep neural networks via layer-peeled model:
+Minority collapse in imbalanced training. Proceedings of the National Academy of Sciences , 118(43), 2021.
+Tomer Galanti, András György, and Marcus Hutter. On the role of neural collapse in transfer learning. In
+International Conference on Learning Representations , 2022. URL https://openreview.net/forum?id=
+SwIp410B6aQ .
+Noah Golowich, Alexander Rakhlin, and Ohad Shamir. Size-independent sample complexity of neural net-
+works.Information and Inference: A Journal of the IMA , 9, 12 2017. doi: 10.1093/imaiai/iaz007.
+Yiding Jiang, Behnam Neyshabur, Hossein Mobahi, Dilip Krishnan, and Samy Bengio. Fantastic general-
+ization measures and where to find them. In International Conference on Learning Representations , 2020.
+URL https://openreview.net/forum?id=SJgIPJBFvH .
+Jianfeng Lu and Stefan Steinerberger. Neural collapse with cross-entropy loss. CoRR, abs/2012.08465, 2020.
+Mehryar Mohri, Afshin Rostamizadeh, and Ameet Talwalkar. Foundations of Machine Learning . The MIT
+Press, 2012. ISBN 026201825X.
+Grégoire Montavon, Mikio L. Braun, and Klaus-Robert Müller. Kernel analysis of deep networks. J. Mach.
+Learn. Res. , 12:2563–2581, 2011.
+Vaishnavh Nagarajan and J. Zico Kolter. Uniform convergence may be unable to explain gen-
+eralization in deep learning. In H. Wallach, H. Larochelle, A. Beygelzimer, F. d 'Alché-
+Buc, E. Fox, and R. Garnett (eds.), Advances in Neural Information Processing Systems , vol-
+ume 32. Curran Associates, Inc., 2019. URL https://proceedings.neurips.cc/paper/2019/file/
+05e97c207235d63ceb1db43c60db7bbb-Paper.pdf .
+Jeffrey Negrea, Gintare Karolina Dziugaite, and Daniel M. Roy. In defense of uniform convergence: Gener-
+alization via derandomization with an application to interpolating predictors. In Proceedings of the 37th
+International Conference on Machine Learning , ICML’20. JMLR.org, 2020.
+Behnam Neyshabur, Ryota Tomioka, and Nathan Srebro. Norm-based capacity control in neural networks.
+In Peter Grünwald, Elad Hazan, and Satyen Kale (eds.), Proceedings of The 28th Conference on Learning
+Theory, volume 40 of Proceedings of Machine Learning Research , pp. 1376–1401, Paris, France, 03–06 Jul
+2015. PMLR. URL https://proceedings.mlr.press/v40/Neyshabur15.html .
+Behnam Neyshabur, Srinadh Bhojanapalli, and Nathan Srebro. A PAC-bayesian approach to spectrally-
+normalized margin bounds for neural networks. In International Conference on Learning Representations ,
+2018. URL https://openreview.net/forum?id=Skz_WfbCZ .
+12Under review as submission to TMLR
+Behnam Neyshabur, Zhiyuan Li, Srinadh Bhojanapalli, Yann LeCun, and Nathan Srebro. Towards under-
+standing the role of over-parametrization in generalization of neural networks. ArXiv, abs/1805.12076,
+2019.
+Vardan Papyan. Traces of class/cross-class structure pervade deep learning spectra. Journal of Machine
+Learning Research , 21(252):1–64, 2020. URL http://jmlr.org/papers/v21/20-933.html .
+VardanPapyan, YanivRomano, andMichaelElad. Convolutionalneuralnetworksanalyzedviaconvolutional
+sparse coding. J. Mach. Learn. Res. , 18:83:1–83:52, 2017.
+Vardan Papyan, X. Y. Han, and David L. Donoho. Prevalence of neural collapse during the terminal phase
+of deep learning training. Proceedings of the National Academy of Sciences , 117(40):24652–24663, 2020.
+Akshay Rangamani, Mengjia Xu, Andrzej Banburski, Qianli Liao, Tomer Galanti, and Tomaso Poggio.
+Dynamics and neural collapse in deep classifiers trained with the square loss. Technical report, Center for
+Brains, Minds and Machines (CBMM), 2022.
+Shai Shalev-Shwartz and Shai Ben-David. Understanding Machine Learning - From Theory to Algorithms.
+Cambridge University Press, 2014. ISBN 978-1-10-705713-5.
+Ravid Shwartz-Ziv and Naftali Tishby. Opening the black box of deep neural networks via information.
+ArXiv, abs/1703.00810, 2017.
+David Silver, Aja Huang, Chris J. Maddison, Arthur Guez, Laurent Sifre, George van den Driessche,
+Julian Schrittwieser, Ioannis Antonoglou, Veda Panneershelvam, Marc Lanctot, Sander Dieleman, Do-
+minik Grewe, John Nham, Nal Kalchbrenner, Ilya Sutskever, Timothy Lillicrap, Madeleine Leach, Koray
+Kavukcuoglu, Thore Graepel, and Demis Hassabis. Mastering the game of Go with deep neural networks
+and tree search. Nature, 529:484–489, 2016. ISSN 0028-0836. doi: 10.1038/nature16961.
+Yaniv Taigman, Ming Yang, Marc’Aurelio Ranzato, and Lior Wolf. Deepface: Closing the gap to human-level
+performance in face verification. In Conference on Computer Vision and Pattern Recognition (CVPR) ,
+2014.
+Tom Tirer and Joan Bruna. Extended unconstrained features model for exploring deep neural collapse, 2022.
+URL https://arxiv.org/abs/2202.08087 .
+Vladimir N. Vapnik. Statistical Learning Theory . Wiley-Interscience, 1998.
+Zitong Yang, Yu Bai, and Song Mei. Exact gap between generalization error and uniform convergence in
+random feature models. In Marina Meila and Tong Zhang (eds.), Proceedings of the 38th International
+Conference on Machine Learning , volume 139 of Proceedings of Machine Learning Research , pp. 11704–
+11715. PMLR, 18–24 Jul 2021. URL https://proceedings.mlr.press/v139/yang21a.html .
+Xiaohua Zhai, Alexander Kolesnikov, Neil Houlsby, and Lucas Beyer. Scaling vision transformers, 2021.
+Chiyuan Zhang, Samy Bengio, Moritz Hardt, Benjamin Recht, and Oriol Vinyals. Understanding deep
+learning requires rethinking generalization. In International Conference on Learning Representations ,
+2017. URL https://openreview.net/forum?id=Sy8gdB9xx .
+Lijia Zhou, Danica J. Sutherland, and Nati Srebro. On uniform convergence and low-norm interpolation
+learning. In H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin (eds.), Advances in Neural
+Information Processing Systems , volume 33, pp. 6867–6877. Curran Associates, Inc., 2020. URL https:
+//proceedings.neurips.cc/paper/2020/file/4cc5400e63624c44fadeda99f57588a6-Paper.pdf .
+Zhihui Zhu, Tianyu DING, Jinxin Zhou, Xiao Li, Chong You, Jeremias Sulam, and Qing Qu. A geometric
+analysis of neural collapse with unconstrained features. In A. Beygelzimer, Y. Dauphin, P. Liang, and
+J. Wortman Vaughan (eds.), Advances in Neural Information Processing Systems , 2021. URL https:
+//openreview.net/forum?id=KRODJAa6pzE .
+13Under review as submission to TMLR
+A Additional Experiments and Details
+A.1 Architectures
+In this section, we describe the architectures used in our experiments.
+The first architecture is a convolutional network, denoted CONV- L-H, which consists of a stack of two
+2×2convolutional layers with stride 2, batch normalization, and ReLU activation. This is followed by L
+stacks of blocks gi(x) =σ(Bi(Ci(x))), whereCiis a3×3convolutional layer with Hchannels, stride 1, and
+padding 1,Biis a batch normalization layer, and σis the ReLU activation. The final layer is linear. The
+ith intermediate layer refers to the output of the ith block of gi.
+The second architecture is an MLP, denoted MLP- L-H, which consists of Lhidden layers, where each layer
+gi(x) =σ(Bi(Ti(x)))contains a linear layer Tiwith output width H, followed by a batch normalization layer
+Biand a ReLU activation function σ. The final layer is linear.
+The third architecture is a convolutional residual network, denoted CONVRES- L-H. It consists of a stack of
+two2×2convolutional layers with stride 2, batch normalization, and ReLU activation, followed by Lresidual
+blocks. Each block computes gi(x) =σ(x+B2
+i(C2
+i(σ(B1
+i(C1
+i(x)))))), whereCj
+iis a3×3convolutional layer
+withHchannels, stride 1, and padding 1,Bj
+iis a batch normalization layer, and σis the ReLU activation.
+The final layer is linear.
+A.2 Estimating the Generalization Bound
+In this section we describe how we empirically estimate the bound in Prop. 1.
+Estimating the bound. We would like to estimate the first term in the bound,
+PS1,S2,˜Y2/bracketleftbig
+Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)/bracketrightbig
+. (5)
+According to Prop. 2 in order to estimate this term we need to generate i.i.d. triplets (Si
+1,Si
+2,˜Yi
+2). Since we
+have limited access to training data, we use a variation of cross-validation and generate k1= 5i.i.d. disjoint
+splits (Si
+1,Si
+2)of the training data S. For each one of these pairs, we generate k2= 3corrupted labelings
+˜Yij
+2. We denote by ˜Sij
+2the set obtained by replacing the labels of Si
+2with ˜Yij
+2and ˜Sij
+3:=Si
+1∪˜Sij
+2.
+As a first step, we would like to estimate Eγ[dϵ
+Si
+1(hγ
+Si
+1)]for eachi∈[k1]. For this purpose, we randomly select
+T1= 5differentinitializations γ1,...,γT1andforeachone, wetrainthemodel hγt
+Si
+1usingthetrainingprotocol
+described in Sec. 4.1. Once trained, we compute dϵ
+S1(hγt
+Si
+1)for eacht∈[T1](see Def. 1) and approximate
+Eγ[dϵ
+Si
+1(hγ
+Si
+1)]usingdi:=1
+T1/summationtextT1
+t=1dϵ
+Si
+1(hγt
+Si
+1).
+As a next step, we would like to evaluate I[di≥dϵ
+min(G,˜Sij
+3)]. We notice that di≥dϵ
+min(G,Si
+1∪˜Si
+2)if
+and only if there is a di-layered neural network f=gdi◦···◦g1for which err ˜Sij
+3(ˆh)≤ϵ, where ˆh(x) :=
+arg minc∈[C]∥f(x)−µf(Sc)∥. In general, computing this Boolean value is computationally hard. Therefore,
+to estimate this Boolean value, we simply train a (di+ 1)-layered network h=e◦fand check whether
+its penultimate layer is ϵ-NCC separable, i.e., err ˜Sij
+3(ˆh)≤ϵ, where ˆh(x) := arg minc∈[C]∥f(x)−µf(Sc)∥.
+If SGD implicitly optimizes neural networks to maximize NCC separability as observed in (Papyan et al.,
+2020) (and also in this paper), we should expect to obtain ϵ-NCC separability in the penultimate layer if that
+is possible with a di-layered network. Since training might be non-optimal, to obtain a robust estimation,
+we trainT2= 5modelsht=et◦ftof depthdi+ 1and pick the one with the best NCC separability in its
+penultimate layer. Namely, we replace dϵ
+min(G,˜Sij
+3)with mint∈[T2]dϵ
+˜Sij
+3(ht)and estimate I[di≥dϵ
+min(G,˜Sij
+3)]
+using I[di≥mint∈[T2]dϵ
+˜Sij
+3(ht)].
+Our final estimation is the following
+1
+k1k1/summationdisplay
+i=11
+k2k2/summationdisplay
+j=1I/bracketleftbigg
+di≥min
+t∈[T2]dϵ
+˜Sij
+3(ht)/bracketrightbigg
+≈PS1,S2,˜Y2/bracketleftbig
+Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)/bracketrightbig
+. (6)
+14Under review as submission to TMLR
+In order to estimate the bound we assume that δ1
+mandδ2
+m,p,αare negligible constants and that α= 1. The
+estimation of the bound is given by the sum of the left hand side in equation 6 and p.
+Estimating the mean test error. To estimate the mean test error, ES1,γ[errP(hγ
+S1)], as typically done
+in machine learning, we replace the population distribution Pwith the test set Stestand we replace the
+expectation over S1andγwith averages across the k1= 5random selections of {Si
+1}k1
+i=1andT1= 5random
+selections of{γt}T1
+t=1. Namely, we compute the following1
+k1/summationtextk1
+i=11
+T1/summationtextT1
+t=1errStest(hγt
+Si
+1)≈ES1,γ[errP(hγ
+S1)].
+A.3 Neural Collapse
+To obtain a comprehensive analysis of collapse across layers, we also estimate the degree of NC1.
+To evaluate NC1, we follow the process suggested by Galanti et al. (2022), which is a simplified version of
+the original approach of Papyan et al. (2020). For a feature map f:Rd→Rpand two (class-conditional)
+distributions2Q1,Q2overX⊂Rd, we define their class-distance normalized variance (CDNV) to be
+Vf(Q1,Q2) :=Varf(Q1) + Varf(Q2)
+2∥µf(Q1)−µf(Q2)∥2,
+whereµu(Q) :=Ex∼Q[u(x)]and by Varu(Q) :=Ex∼Q[∥u(x)−µu(Q)∥2]the mean and variance of u(x)for
+x∼Q. Essentially, this quantity measures to what extent the feature vectors of samples from Q1andQ2
+are separated and clustered in space.
+Todemonstratethegradualevolutionofcollapseacrossthelayers, foreachsub-architecture fi=gi◦···◦g1(x)
+we consider the train and test class features variations Avgc̸=c′[Vfi(Sc,Sc′)]andAvgc̸=c′[Vfi(Pc,Pc′)]. The
+population distribution of each class, Pc, is replaced with the test samples of that class.
+As shown by Galanti et al. (2022), this definition is essentially the same as that of Papyan et al. (2020).
+Furthermore, they showed that the NCC classification error rate can be upper bounded in terms of the
+CDNV. However, the NCC error can be zero in cases where the CDNV is larger than zero. For example, if
+the two classes are uniformly distributed over the 1-radius circles around the points (−1,0)and(1,0)inR2,
+then they are perfectly NCC separable while the CDNV between the two distributions is 0.25.
+Auxiliary experiments on the effective depth. In Figs. 6-13 we plot the NCC and the CDNV rates
+of neural networks with varying numbers of layers evaluated on the train and test data. Each curve stands
+for a different layer within the network. As can be seen, in all cases, for networks deeper than a threshold
+we obtain (near-perfect) NCC separability in all of the top layers. Furthermore, the degree of class-features
+variability collapse increases with the network’s depth as depicted by decreasing CDNVs.
+Auxiliary experiments with noisy labels. In Figs. 14-18 we repeat the experiment in Fig. 3 and plot
+the results of the same experiment, with different networks and datasets (see captions). As can be seen, the
+effective NCC depth of a neural network tends to increase as we train with increasing amounts of corrupted
+labels.
+2The definition can be extended to finite sets S1,S2⊂Xby defining Vf(S1,S2) =Vf(U[S1],U[S2]).
+15Under review as submission to TMLR
+NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+train acc0.981.00
+3 layers 5 layers 8 layersNCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+train acc 0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+train acc 0.981.00
+12 layers 16 layers 20 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+test acc
+3 layers 5 layers 8 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+test acc
+12 layers 16 layers 20 layers
+Figure 4: Intermediate NCC separability of CONVRES- L-500 trained on CIFAR10. We plot the
+NCC train and test accuracy rates of neural networks with varying numbers of layers. Each curve stands for
+a different layer within the network.
+16Under review as submission to TMLR
+CDNV - train
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - train
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layersCDNV - test
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - test
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layers
+Figure 5: Intermediate class-features variability collapse separability of CONVRES- L-500
+trained on CIFAR10. We plot the CDNV on the training and test data of neural networks with varying
+numbers of layers. Each curve stands for a different layer within the network.
+17Under review as submission to TMLR
+NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+train acc0.981.00
+3 layers 5 layers 8 layersNCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+train acc 0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+train acc 0.981.00
+12 layers 16 layers 20 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+test acc
+3 layers 5 layers 8 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+test acc
+12 layers 16 layers 20 layers
+Figure 6: Intermediate NCC separability of CONV- L-400 trained on CIFAR10. We plot the NCC
+train and test accuracy rates of neural networks with varying numbers of layers. Each curve stands for a
+different layer within the network.
+18Under review as submission to TMLR
+CDNV - train
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - train
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layersCDNV - test
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - test
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch25
+23
+21
+212325CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layers
+Figure 7: Intermediate class-features variability collapse separability of CONV- L-400 trained
+on CIFAR10. We plot the CDNV on the training and test data of neural networks with varying numbers
+of layers. Each curve stands for a different layer within the network.
+19Under review as submission to TMLR
+NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+train acc0.981.00
+3 layers 5 layers 8 layersNCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+train acc 0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+train acc 0.981.00
+12 layers 16 layers 20 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+test acc
+3 layers 5 layers 8 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+test acc
+12 layers 16 layers 20 layers
+Figure 8:Intermediate neural collapse of MLP- L-300 trained on CIFAR10. We plot the NCC train
+and test accuracy rates of neural networks with varying numbers of layers. Each curve stands for a different
+layer within the network.
+20Under review as submission to TMLR
+CDNV - train
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - train
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layersCDNV - test
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - test
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layers
+Figure 9: Intermediate class-features variability collapse separability of MLP- L-300 trained on
+CIFAR10. We plot the CDNV on the training and test data of neural networks with varying numbers of
+layers. Each curve stands for a different layer within the network.
+21Under review as submission to TMLR
+NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+train acc0.981.00
+3 layers 5 layers 8 layersNCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+train acc 0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+train acc 0.981.00
+12 layers 16 layers 20 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+test acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+test acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+test acc0.981.00
+3 layers 5 layers 8 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+test acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+test acc 0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+test acc 0.981.00
+12 layers 16 layers 20 layers
+Figure 10: Intermediate neural collapse of CONV- L-50 trained on MNIST. We plot the NCC train
+and test accuracy rates of neural networks with varying numbers of layers. Each curve stands for a different
+layer within the network.
+22Under review as submission to TMLR
+CDNV - train
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - train
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layersCDNV - test
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - test
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch29
+27
+25
+23
+21
+2123CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+layer 19
+layer 20
+12 layers 16 layers 20 layers
+Figure 11: Intermediate class-features variability collapse separability of CONV- L-50 trained
+on MNIST. We plot the CDNV on the training and test data of neural networks with varying numbers of
+layers. Each curve stands for a different layer within the network.
+23Under review as submission to TMLR
+NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+train acc0.981.00
+3 layers 5 layers 8 layersNCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+train acc 0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+train acc 0.981.00
+12 layers 16 layers 18 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracy
+layer 1
+layer 2
+layer 3
+layer 4
+layer 5
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+test acc
+3 layers 5 layers 8 layersNCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+test acc
+12 layers 16 layers 18 layers
+Figure 12: Intermediate neural collapse of MLP- L-100 trained on Fashion MNIST. We plot the
+NCC train and test accuracy rates of neural networks with varying numbers of layers. Each curve stands for
+a different layer within the network.
+24Under review as submission to TMLR
+CDNV - train
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - train
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+12 layers 16 layers 18 layersCDNV - test
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+3 layers 5 layers 8 layersCDNV - test
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNVlayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9layer 10
+layer 11
+layer 12
+layer 13
+layer 14
+layer 15
+layer 16
+layer 17
+layer 18
+12 layers 16 layers 18 layers
+Figure 13: Intermediate class-features variability collapse separability of MLP- L-100 trained
+on Fashion MNIST. We plot the CDNV on the training and test data of neural networks with varying
+numbers of layers. Each curve stands for a different layer within the network.
+25Under review as submission to TMLR
+CDNV - Train
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0%noise 10% noise 25% noise 50% noise 75% noiseCDNV- Test
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0%noise 10% noise 25% noise 50% noise 75% noise
+Figure 14: Intermediate neural collapse of CONV-10-400 trained on CIFAR10 with partially
+corrupted labels. In the first (third) row, we plot the CDNV on the train (test) data for intermediate
+layers of networks trained with varying amounts of corrupted labels (see legend). In the second (fourth)
+row, we plot the NCC accuracy rates of the various layers of a network trained with a certain amount of
+corrupted labels (see titles).
+26Under review as submission to TMLR
+CDNV - Train
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0%noise 10% noise 25% noise 50% noise 75% noiseCDNV - Test
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch24
+22
+2022242628CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0%noise 10% noise 25% noise 50% noise 75% noise
+Figure 15: Intermediate neural collapse of CONVRES-10-500 trained on CIFAR10 with noisy
+labels.See Fig 3 in the main text for details.
+27Under review as submission to TMLR
+CDNV - Train
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0%noise 10% noise 25% noise 50% noise 75% noiseCDNV - Test
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+10% noise
+25% noise
+50% noise
+75% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0%noise 10% noise 25% noise 50% noise 75% noise
+Figure 16: Intermediate neural collapse of MLP-10-500 trained on CIFAR10 with noisy labels.
+See Fig 3 in the main text for details.
+28Under review as submission to TMLR
+CDNV - Train
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+layer 4 layer 6 layer 8 layer 9 layer 10NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0%noise 5%noise 10% noise 20% noise 30% noiseCDNV - Test
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+0 100 200 300 400 500
+Epoch28
+25
+22
+212427210CDNV0% noise
+5% noise
+10% noise
+15% noise
+20% noise
+30% noise
+layer 4 layer 6 layer 8 layer 9 layer 10NCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc
+0%noise 5%noise 10% noise 20% noise 30% noise
+Figure 17: Intermediate neural collapse of CONV-10-100 trained on Fashion MNIST with noisy
+labels.See Fig. 3 in the main text for details.
+29Under review as submission to TMLR
+CDNV - Train
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC train acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+train acc0.981.00
+0%noise 1%noise 2%noise 5%noise 10% noiseCDNV - Test
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+0 100 200 300 400 500
+Epoch28
+26
+24
+22
+202224CDNV0% noise
+1% noise
+2% noise
+5% noise
+10% noise
+20% noise
+layer 3 layer 4 layer 6 layer 8 layer 10NCC test acc
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc0.981.00
+0 100 200 300 400 500
+Epoch0.00.20.40.60.81.0Accuracylayer 1
+layer 2
+layer 3
+layer 4
+layer 5
+layer 6
+layer 7
+layer 8
+layer 9
+layer 10
+test acc0.981.00
+0%noise 1%noise 2%noise 5%noise 10% noise
+Figure 18: Intermediate neural collapse of CONV-10-50 trained on MNIST with partially cor-
+rupted labels. See Fig. 14 for details.
+30Under review as submission to TMLR
+B Proofs
+Proposition 1. Letm∈N,p∈(0,1/2),α∈(0,1)andϵ∈(0,1). Assume that the error of the learning
+algorithm is δ1
+m-uniform. Assume that S1,S2∼PB(m). Lethγ
+S1be the output of the learning algorithm given
+access to a dataset S1and initialization γ. Then,
+ES1Eγ[errP(hγ
+S1)]≤PS1,S2,˜Y2/bracketleftbig
+Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)/bracketrightbig
++ (1 +α)p+δ1
+m+δ2
+m,p,α,(4)
+where ˜Y2={˜yi}m
+i=1is uniformly selected to be a set of labels that disagrees with Y2onpmvalues.
+Proof.LetS1={(x1
+i,y1
+i)}m
+i=1andS2={(x2
+i,y2
+i)}m
+i=1be two balanced datasets. Let ϵ > 0,p > 0and
+q= (1 +α)p. Let ˜Y2and ˆY2be a uniformly selected set of labels that disagree with Y2onpmandqm
+randomly selected labels (resp.). We denote by ˜S2and ˆS2the relabeling of S2with the labels in ˜Y2and in
+ˆY2(resp.). We define four different events,
+A1={(S1,S2,˜Y2)|∃q≥(1 +α)p:dϵ
+min(G,S1∪˜S2)>EˆY2[dϵ
+min(G,S1∪ˆS2)]}
+A2={(S1,S2)|the mistakes of hγ
+S1are not uniform over S2}
+A3={(S1,S2,˜Y2)|(S1,S2,˜Y2)/∈A1∪A2andEγ[dϵ
+S1(hγ
+S1)]<dϵ
+min(G,S1∪˜S2)}
+A4={(S1,S2,˜Y2)|(S1,S2,˜Y2)/∈A1∪A2andEγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)}
+B1={(S1,S2,˜Y2)|Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)}(7)
+By the law of total expectation
+ES1Eγ[errP(hγ
+S1)] = ES1,S2Eγ[errS2(hγ
+S1)]
+=4/summationdisplay
+i=1P[Ai]·ES1,S2,˜Y2[Eγ[errS2(hγ
+S1)]|Ai]
+≤P[A1] +P[A2] +ES1,S2,˜Y2[Eγ[errS2(hγ
+S1)]|A3] +P[B1],(8)
+where the last inequality follows from err S2(hγ
+S1)≤1,P[A3]≤1andA4⊂B1.
+We would like to upper bound each one of the above terms. First, we notice that since the mistakes of the
+network are δ1
+m-uniform, P[A2]≤δ1
+m. In addition, by definition P[A1]≤δ2
+m,p,α.
+As a next step, we upper bound ES1,S2,˜Y2[Eγ[errS2(hγ
+S1)]|A3]. Assume that (S1,S2,˜Y2)∈A3. Hence,
+(S1,S2,˜Y2)/∈A1∪A2. Then, the mistakes of hγ
+S1overS2are uniformly distributed (with respect to the
+selection of γ). Assume by contradiction that err S2(hγ
+S1)>(1 +α)pwith non-zero probability over the
+selection of γ. Then, since the mistakes of hγ
+S1overS2are uniformly distributed, err S2(hγ
+S1)>(1 +α)pfor
+all initializations γ. Therefore, we have
+EˆY2[dϵ
+min(G,S1∪ˆS2)]≤Eγ[dϵ
+S1(hγ
+S1)]<dϵ
+min(G,S1∪˜S2),
+where the first inequality follows from the definition of dϵ
+min(G,S1∪ˆS2)and the second one by the assumption
+that (S1,S2,˜Y2)∈A3. However, this inequality contradicts the fact that (S1,S2,˜Y2)/∈A1. Therefore, we
+conclude that in this case, Eγ[errS2(hγ
+S1)]≤(1 +α)pandES1,S2,˜Y2[Eγ[errS2(hγ
+S1)]|A3]≤(1 +α)p.
+Proposition 2. Letm∈N,p∈(0,1/2),α∈(0,1)andϵ∈(0,1). Assume that the error of the learning
+algorithm is δ1
+m-uniform. Let S1,S2,Si
+1,Si
+2∼PB(m)(fori∈[k]). Let ˜Yi
+2={˜yi}m
+i=1be a set of labels that
+disagrees with Yi
+2on uniformly selected pmlabels and ˜Si
+2is a relabeling of S2with the labels in ˜Yi
+2. Lethγ
+S1be
+the output of the learning algorithm given access to a dataset S1and initialization γ. Then, with probability
+at least 1−δover the selection of {(Si
+1,Si
+2,˜Yi
+2)}k
+i=1, we have
+ES1Eγ[errP(hγ
+S1)]≤1
+kk/summationdisplay
+i=1I/bracketleftig
+Eγ[dϵ
+Si
+1(hγ
+Si
+1)]≥dϵ
+min(G,Si
+1∪˜Si
+2)/bracketrightig
++ (1 +α)p+δ1
+m+δ2
+m,p,α +/radicalbigg
+log(2/δ)
+2k.
+31Under review as submission to TMLR
+Proof.By Prop. 1, we have
+ES1Eγ[errP(hγ
+S1)]≤PS1,S2,˜Y2/bracketleftbig
+Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)/bracketrightbig
++ (1 +α)pm+δ1
+m+δ2
+m,p,α
+We define i.i.d. random variables
+Vi=I/bracketleftig
+Eγ[dϵ
+Si
+1(hγ
+Si
+1)]≥dϵ
+min(G,Si
+1∪˜Si
+2)/bracketrightig
+. (9)
+Therefore, we can rewrite,
+PS1,S2,˜Y2/bracketleftbig
+Eγ[dϵ
+S1(hγ
+S1)]≥dϵ
+min(G,S1∪˜S2)/bracketrightbig
+=E[V1] (10)
+By Hoeffding’s inequality,
+P/bracketleftigg/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsinglek−1k/summationdisplay
+i=1Vi−E[V1]/vextendsingle/vextendsingle/vextendsingle/vextendsingle/vextendsingle≥ϵ/bracketrightigg
+≤2 exp(−2kϵ2). (11)
+By choosing ϵ=/radicalbig
+log(1/2δ)/2k, we obtain that with probability at least 1−δ, we have
+E[V1]≤1
+kk/summationdisplay
+i=1Vi+/radicalbig
+log(1/2δ)/2k. (12)
+When combined with Prop. 1, we obtain the desired bound.
+32
