@@ -88,13 +88,13 @@ def plot_bad_instances(d_max, num_trials):
     #plt.scatter(ds, ilp_scores, label='ilp', alpha=.5)
     plt.xlabel('Review time (d)')
     #plt.ylabel('Aggregate similarity scores')
-    plt.title('Probability that LP instance is not integral')
+    #plt.title('Probability that LP instance is not integral')
     #plt.legend()
     #plt.grid(True)
-    plt.ylabel('Prob bad')
+    plt.ylabel('Probrability of non-integrality')
     plt.show()    
     
-plot_bad_instances(10, 500)
+plot_bad_instances(10, 10000)
 #plot_integrality(10, 50)
     
     
