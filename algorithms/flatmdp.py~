@@ -1,0 +1,17 @@
+# one state per reviewer with value: expected score they contribute if assigned
+# in std mdp, state: pool of currently available reviewers: value in state: discounted sum of scores moving from her
+# in flat mdp: claim V_A = sum[W_r for r in A]
+import numpy as np
+
+num_papers, num_reviewers = 100, 10
+scores = np.random.rand(num_papers, num_reviewers)
+
+init_expected_score = 1
+W = [init_expected_score for r in range(num_reviewers)]
+
+# update values
+# a random paper/score vector arrives,
+score_p = np.random.rand(num_papers)
+# suppose revs B1 .. Bd were busy
+# we assign those with highest score[r] + W[r] of the avilable
+# then B0 .. Bd-1 are busy
