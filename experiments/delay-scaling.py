@@ -6,6 +6,7 @@ import greedy
 from online import rank_greedy_assign, greedy_rt_assign
 
 scores = np.loadtxt('../similarity_result.txt')
+scores = np.random.rand(*scores.shape)
 P, R = scores.shape
 lambd = 2
 def obj_score(scores, assign):
@@ -17,7 +18,7 @@ obj_scores = []
 
 for d in d_values:
     greedy_assignment = greedy.assign(scores, review_time=d, min_reviewer_per_paper = lambd)
-    rank_greedy_assignment = [rank_greedy_assign(scores, review_time=d, min_reviewer_per_paper=lambd, factor=f) for f in [10**(-i) for i in range(5, 10, 2)]]
+    rank_greedy_assignment = [rank_greedy_assign(scores, review_time=d, min_reviewer_per_paper=lambd, factor=f) for f in [10**(-i) for i in range(1, 6, 2)]]
     greedy_rt_assignment = greedy_rt_assign(scores, review_time=d, min_reviewer_per_paper=lambd)
     obj_scores.append(list(map(lambda assign: obj_score(scores, assign),
                   [greedy_assignment, greedy_rt_assignment] + rank_greedy_assignment)))
