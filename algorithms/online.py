@@ -64,7 +64,7 @@ def rank_greedy_assign(scores, review_time=6, min_reviewer_per_paper=3, factor=1
 
 def greedy_rt_assign(scores, review_time=6, min_reviewer_per_paper=3, w_max=1, scaling_factor = 10): 
 
-    modified_scores = scores * scaling_factor
+    modified_scores = scores #* scaling_factor
     (num_papers, num_reviewers) = scores.shape
     INF = 10
     last_assign = np.full(num_reviewers, INF)
@@ -99,7 +99,6 @@ def greedy_rt_assign(scores, review_time=6, min_reviewer_per_paper=3, w_max=1, s
             greedy += 1 
             top_reviewers = np.argsort(-available_modified_scores)[:min_reviewer_per_paper]
             greedy_rt_assign[paper, top_reviewers] = 1
-            #greedy_rt_assign[paper, rankdata(-available_scores) <= min_reviewer_per_paper] = 1
 
         last_assign += 1    
         last_assign[greedy_rt_assign[paper].astype(bool)] = 0
