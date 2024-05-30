@@ -24,7 +24,7 @@ def eval(scores, review_time=6, min_reviewer_per_paper=3, w_max=1, scaling_facto
 
     for paper in range(num_papers):
         available_scores = np.where(last_assign >= review_time, scores[paper], -np.inf)
-        
+                
         # Get the reviewers that meet the threshold and are available
         thresholded_reviewers = np.where(available_scores > T)[0]
         
@@ -35,7 +35,8 @@ def eval(scores, review_time=6, min_reviewer_per_paper=3, w_max=1, scaling_facto
                                                 min_reviewer_per_paper, replace=False)
             obj_score += np.sum(available_scores[chosen_reviewers])
             #print("threshold", T, available_scores[ chosen_reviewers], obj_score)
-            #print(available_scores, chosen_reviewers)            
+            #greedy_rt_assign[paper, top_reviewers] = 1
+            #greedy_rt_assign[paper, rankdata(-available_scores) <= min_reviewer_per_paper] = 1            #print(available_scores, chosen_reviewers)            
             
         else:
             # Fall back to the Greedy logic
