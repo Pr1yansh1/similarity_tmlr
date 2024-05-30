@@ -6,8 +6,11 @@ import greedy, rankgreedy, greedyrt
 from online import rank_greedy_assign, greedy_rt_assign
 
 scores = np.loadtxt('../similarity_result.txt')
-scores = np.random.rand(*scores.shape)
+#scores = np.exp(scores) / np.exp(np.max(scores))
 num_papers, num_reviewers = scores.shape
+#scores = np.random.rand(*scores.shape)
+scores = np.random.rand(num_papers, 1) @ np.random.rand(1, num_reviewers)
+scores /= np.max(scores)
 lambd = 2
 
 d_values = range(1, num_papers, num_papers//20)
