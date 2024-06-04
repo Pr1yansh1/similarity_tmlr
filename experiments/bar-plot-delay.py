@@ -5,15 +5,15 @@ add_path("../algorithms")
 import oracle, greedy, mdpdelay
 
 print("\n Making plots ")
-real_scores = np.loadtxt("../similarity_result.txt")
-unfriendly_scores = np.array([[np.random.choice([1, 0.01]), 0, 0, 0,0,0, 0] for _ in range(100)])
-random_scores = np.random.rand(100, 10)
-low_rank_rand_scores = np.random.rand(100, 1) @ np.random.rand(1, 8)
+P, R, d, r0 = 100, 50, 2, 1
+real_scores = np.loadtxt("../similarity_result.txt")[:P, :R]
+unfriendly_scores = np.array([[np.random.choice([1, 0.01])]
+                              +[0]*(R-1) for _ in range(P)])
+random_scores = np.random.rand(P, R)
+low_rank_rand_scores = np.random.rand(P, 1) @ np.random.rand(1, R)
 
 score_dist_names = ['Real', 'Random', 'Unfriendly', 'Low-rank Random']
-score_dists = [real_scores[:, :8], random_scores, unfriendly_scores, low_rank_rand_scores]
-r0=1
-d=4
+score_dists = [real_scores, random_scores, unfriendly_scores, low_rank_rand_scores]
 obj_scores = []
 
 #scores_dists = [scores / np.mean(scores) for scores in score_dists]
@@ -45,8 +45,8 @@ for i, policy in enumerate(policies):
     ax.bar(index + i * bar_width, obj_scores[i], bar_width, label=policy)
     
 ax.set_ylabel('Scores')
-ax.set_title('Scores by Policy and Distribution')
+#ax.set_title('Scores by Policy and Distribution')
 ax.set_xticks(index + bar_width * (len(policies) - 1) / 2)
 ax.set_xticklabels(score_dist_names)
-ax.legend()
+ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
 plt.show()
