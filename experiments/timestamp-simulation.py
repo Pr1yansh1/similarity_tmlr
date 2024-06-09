@@ -47,18 +47,8 @@ def assign_reviewers(arrival_times, review_times, similarity_matrix):
 def true_timeseries():
     sim_scores = np.loadtxt('../similarity_result.txt')
     
-    df = pd.read_csv('../dataset/paper_crawling/forum_times.csv')[:-2]
-    print("Loaded timeseries", df)
-    df = df.sort_values(by='submission_timestamp')
-    df['review_timestamps'] = df['review_timestamps'].apply(literal_eval)
-    def calculate_review_times(row):
-        return [review_time - row['submission_timestamp'] for review_time in row['review_timestamps'][:3]]
-    df['review_times'] = df.apply(calculate_review_times, axis=1)
-    #df.to_csv('../dataset/paper_crawling/forum_times_with_review_duration.csv')
-    #df = pd.to_csv('../dataset/paper_crawling/forum_times_with_review_duration.csv')
-    
-    print("Processed timeseries", df)
-    
+    df = pd.read_csv('../dataset/paper_crawling/forum_times_with_review_duration.csv')
+    df['review_times'] = df['review_times'].apply(literal_eval)
     arrival_times = list(df['submission_timestamp'])
     review_times = list(df['review_times'])
 
@@ -73,8 +63,8 @@ def true_timeseries():
     print(lam * ms_in_day, mu * ms_in_day, r0, R, P)
     #plt.hist(interarrival_times, bins=50)
     #plt.hist([time for paper in review_times for time in paper], bins=50)
-    plt.hist(arrival_times, bins=50)
-    plt.show()
+    #plt.hist(arrival_times, bins=50)
+    #plt.show()
     
     return arrival_times, review_times, sim_scores
 
