@@ -6,9 +6,12 @@ import oracle, greedy, mdp
 
 print("\n Making plots ")
 real_scores = np.loadtxt("../similarity_result.txt")
-unfriendly_scores = np.array([[np.random.choice([1, 0.01]), 0, 0] for _ in range(100)])
 random_scores = np.random.rand(100, 10)
+unfriendly_scores = np.array([[np.random.choice([1, 0.01]), 0, 0] for _ in range(100)])
+
 low_rank_rand_scores = np.random.rand(100, 1) @ np.random.rand(1, 10)
+
+
 
 score_dist_names = ['Real', 'Random', 'Unfriendly', 'Low-rank Random']
 score_dists = [real_scores[:, :10], random_scores, unfriendly_scores, low_rank_rand_scores]

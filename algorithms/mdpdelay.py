@@ -24,7 +24,7 @@ def mdp(scores, delay = 3, gamma=0.9):
     num_batches = num_papers // batch_size
     err, epoch = 1, 0
 
-    while err >= 1e-4 and epoch < 10:
+    while err >= 1e-5 and epoch < 20:
         old_values = np.copy(values)
 
         for i in range(num_batches):
@@ -50,6 +50,10 @@ def mdp(scores, delay = 3, gamma=0.9):
         err = np.max(np.abs(old_values - values))
         print(epoch, f"value size: {np.max(old_values)}, change in values {err}")
         epoch += 1
+
+    print("values", values)
+    values = np.zeros(len(states))
+    print("values", values)
 
     def policy(score_vec, state):
         # (takes score vector (s1 .. sr), busy reviewer set (r1 .. rl)) and returns tuple of assignments
@@ -80,6 +84,12 @@ def assign(scores, delay = 2):
 
 #scores = np.loadtxt('../similarity_result.txt')[:, 10:18]
 scores = np.random.rand(20, 4)
-#scores = np.array([[np.random.choice([1, 0.01]), 0, 0] for _ in range(64)])
+scores = np.array([[np.random.choice([1, 0.01]), 0, 0] for _ in range(64)])
+d = 2
 mdp_assign = assign(scores, delay=2)
-print(scores, mdp_assign)
+
+import greedy
+
+print("Greedy eval", greedy.eval(scores, review_time=d-1, min_reviewer_per_paper=1))
+
+print("MDP eval", np.sum(scores * mdp_assign))

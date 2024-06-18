@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 #import greedy
 #from online import rank_greedy_assign, greedy_rt_assign
 
-def assign_reviewers(arrival_times, review_times, similarity_matrix):
+def assign_reviewers(data_series):
+    arrival_times, review_times, similarity_matrix = data_series
     P, R = similarity_matrix.shape
     total_similarity_score = 0
 
@@ -39,21 +40,13 @@ def assign_reviewers(arrival_times, review_times, similarity_matrix):
             reviewer_availability[best_reviewer] = arrival_time + required_review_times[i]
             total_similarity_score += similarity_matrix[p][best_reviewer]
 
+
         #print(len(available_reviewers), len(assigned_reviewers), reviewer_availability)
 
-    return total_similarity_score
-
-
-def true_timeseries():
-    sim_scores = np.loadtxt('../similarity_result.txt')
+    avg_reviews_per_paper = np.mean([len(times_per_paper) for times_per_paper in review_times])
+    avg_similarity_per_assignment = total_similarity_score / P / avg_reviews_per_paper
+    print("Time series statistics")
     
-    df = pd.read_csv('../dataset/paper_crawling/forum_times_with_review_duration.csv')
-    df['review_times'] = df['review_times'].apply(literal_eval)
-    arrival_times = list(df['submission_timestamp'])
-    review_times = list(df['review_times'])
-
-    print("Computing load..")
-    P, R = sim_scores.shape
     interarrival_times = [arrival_times[i+1]-arrival_times[i] for i in range(P-1)]
     lam = 1/np.mean(interarrival_times)
     mu = 1/np.mean(review_times)
@@ -65,6 +58,27 @@ def true_timeseries():
     #plt.hist([time for paper in review_times for time in paper], bins=50)
     #plt.hist(arrival_times, bins=50)
     #plt.show()
+    
+    return avg_similarity_per_assignment
+
+
+def true_timeseries():
+    sim_scores = np.loadtxt('../similarity_result.txt')
+    
+    df = pd.read_csv('../dataset/paper_crawling/forum_times_with_review_duration.csv')
+    df['review_times'] = df['review_times'].apply(literal_eval)
+    arrival_times = list(df['submission_timestamp'])
+    review_times = list(df['review_times'])
+
+    print("Time series analyses:")
+    arrival_timestamps = pd.to_datetime(df['submission_timestamp'], unit='ms')
+    arrival_times_df = pd.DataFrame({'timestamp': arrival_timestamps})
+    monthly_counts = arrival_times_df.groupby(pd.Grouper(key='timestamp', freq='M'), as_index=True)
+    monthly_counts.plot(kind='bar', color='skyblue')
+    plt.xticks(rotation=45)
+    plt.gca().set_xticklabels([x.strftime('%b-%y') for x in monthly_counts.index])
+    plt.show()
+                                            
     
     return arrival_times, review_times, sim_scores
 
@@ -111,7 +125,16 @@ def bursty_poisson_timeseries(P, R, lam1, lam2, window_size, mu, r0):
     return arrival_times, review_times, sim_scores    
     
 
-print("uniform time series similarity", assign_reviewers(*uniform_timeseries(10, 7, 2, 3)))
-print("poisson time series similarity", assign_reviewers(*poisson_timeseries(809, 418, 2.5, 0.04, 3)))
-print("true time series similarity",    assign_reviewers(*true_timeseries()))
-print("bursty poisson arrival similarity", assign_reviewers(*bursty_poisson_timeseries(809, 418, 5, 1, 10, 0.04, 3)))
+print("uniform time series similarity", assign_reviewers(uniform_timeseries(10, 7, 2, 3)))
+print("poisson time series similarity", assign_reviewers(poisson_timeseries(809, 418, 2.5, 0.04, 3)))
+#print("true time series similarity",    assign_reviewers(true_timeseries()))
+print("bursty poisson arrival similarity", assign_reviewers(bursty_poisson_timeseries(809, 418, 5, 1, 10, 0.04, 3)))
+
+timeseries_labels = ["Uniform", "Poisson", "Bursty"]
+timeseries = [uniform_timeseries(10, 7, 2, 3), poisson_timeseries(809, 418, 2.5, 0.04, 3),
+              bursty_poisson_timeseries(809, 418, 5, 1, 10, 0.04, 3)]
+values = list(map(assign_reviewers, timeseries))
+plt.bar(timeseries_labels, values)
+plt.xlabel('Timeseries')
+plt.ylabel('Mean Similarity Score')
+plt.show()

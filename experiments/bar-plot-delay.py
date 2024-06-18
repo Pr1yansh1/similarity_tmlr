@@ -7,18 +7,22 @@ import oracle, greedy, mdpdelay
 print("\n Making plots ")
 P, R, d, r0 = 100, 50, 2, 1
 real_scores = np.loadtxt("../similarity_result.txt")[:P, :R]
-unfriendly_scores = np.array([[np.random.choice([1, 0.01])]
-                              +[0]*(R-1) for _ in range(P)])
 random_scores = np.random.rand(P, R)
+unfriendly_scores = np.array([[np.random.choice([1, 0.01])]+[0]*(R-1) for _ in range(P)])
 low_rank_rand_scores = np.random.rand(P, 1) @ np.random.rand(1, R)
+exp_real_scores = np.exp(real_scores)
+exp_real_scores /= np.max(exp_real_scores)
+clustered_real_scores = np.loadtxt("../dataset/similarity_matrix_reordered.txt")[:P, :R]
 
-score_dist_names = ['Real', 'Random', 'Unfriendly', 'Low-rank Random']
-score_dists = [real_scores, random_scores, unfriendly_scores, low_rank_rand_scores]
+score_dists = [('Random', random_scores), ('Real', real_scores),
+    ('Exp.\nReal', exp_real_scores), ('Clustered\nReal', clustered_real_scores),
+    ('Low-Rank\nRandom', low_rank_rand_scores), ('Unfriendly', unfriendly_scores)]
+score_dist_names, score_dist_matrices = zip(*score_dists)
 obj_scores = []
 
 #scores_dists = [scores / np.mean(scores) for scores in score_dists]
 
-for scores in score_dists:
+for scores in score_dist_matrices:
     print(scores.shape)
     ilp_score = np.mean(scores * oracle.ilp(scores, review_time =d, min_reviewer_per_paper=r0))
     greedy_score = greedy.eval(scores, review_time=d, min_reviewer_per_paper=r0) / scores.size
@@ -49,4 +53,8 @@ ax.set_ylabel('Scores')
 ax.set_xticks(index + bar_width * (len(policies) - 1) / 2)
 ax.set_xticklabels(score_dist_names)
 ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
+#plt.show()
+plt.tight_layout()
+plt.savefig('bar-plot-delay-2v5.pgf')
+plt.savefig('bar-plot-delay-2v5.pdf')
 plt.show()
