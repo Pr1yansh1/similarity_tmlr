@@ -13,7 +13,6 @@ def eval(scores, review_time = 6, min_reviewer_per_paper = 3):
         #greedy_assign[paper, rankdata(-available_scores) <= min_reviewer_per_paper] = 1
         last_assign += 1
         last_assign[top_reviewers] = 0
-        #print(paper, scores[paper], last_assign)
         obj_score += np.sum(available_scores[top_reviewers])
 
     return obj_score

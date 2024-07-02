@@ -52,12 +52,13 @@ def mdp(scores, delay = 3, gamma=0.9):
         epoch += 1
 
     print("values", values)
-    values = np.zeros(len(states))
+    #values = np.zeros(len(states))
     print("values", values)
 
     def policy(score_vec, state):
-        # (takes score vector (s1 .. sr), busy reviewer set (r1 .. rl)) and returns tuple of assignments
-        available_reviewers = set(range(num_reviewers)) - set(state)
+        # takes score vector (s1 .. sr), assignment state (r1 .. rl)) and returns assignment tuple
+        busy_reviewers = set(filter(lambda x : x>=0, state))
+        available_reviewers = set(range(num_reviewers)) - busy_reviewers #set(state)
         q_values = {rev : score_vec[rev] + gamma * values[
             state2idx(list(state[1:])+[rev])] for rev in available_reviewers}
         return max(q_values, key=q_values.get)
@@ -73,23 +74,25 @@ def assign(scores, delay = 2):
     # assign greedy in first step
     mdp_assign = np.zeros(scores.shape)
     # mdp_assign[0, rankdata(scores[0]) <= 1] = 1
-    assigned = [0]* delay
+    assigned = [-1]* delay
+    obj_score = 0
 
     for paper in range( num_papers):
         next_assign = policy(scores[paper], assigned)
         mdp_assign[paper, next_assign] = 1
+        obj_score += scores[paper, next_assign]
         assigned = assigned[1:]+[next_assign]
 
-    return mdp_assign
+    return mdp_assign, obj_score
 
 #scores = np.loadtxt('../similarity_result.txt')[:, 10:18]
 scores = np.random.rand(20, 4)
 scores = np.array([[np.random.choice([1, 0.01]), 0, 0] for _ in range(64)])
-d = 2
-mdp_assign = assign(scores, delay=2)
+d = 1
+mdp_assign, mdp_score = assign(scores, delay=d)
 
 import greedy
 
-print("Greedy eval", greedy.eval(scores, review_time=d-1, min_reviewer_per_paper=1))
+print("Greedy eval", greedy.eval(scores, review_time=d, min_reviewer_per_paper=1))
 
-print("MDP eval", np.sum(scores * mdp_assign))
+print("MDP eval", mdp_score, np.sum(scores * mdp_assign))

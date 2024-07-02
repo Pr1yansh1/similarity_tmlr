@@ -26,7 +26,7 @@ for scores in score_dist_matrices:
     print(scores.shape)
     ilp_score = np.mean(scores * oracle.ilp(scores, review_time =d, min_reviewer_per_paper=r0))
     greedy_score = greedy.eval(scores, review_time=d, min_reviewer_per_paper=r0) / scores.size
-    mdp_score = np.mean(scores * mdpdelay.assign(scores, delay=d))
+    mdp_score = np.mean(scores * mdpdelay.assign(scores, delay=d)[0])
 
     #obj_scores.append([ilp_score, mdp_score, greedy_score])
     obj_scores.append([1, mdp_score/ilp_score, greedy_score/ilp_score])
@@ -55,6 +55,6 @@ ax.set_xticklabels(score_dist_names)
 ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
 #plt.show()
 plt.tight_layout()
-plt.savefig('bar-plot-delay-2v5.pgf')
-plt.savefig('bar-plot-delay-2v5.pdf')
+plt.savefig('bar-plot-delay-2v7.pgf')
+plt.savefig('bar-plot-delay-2v7.pdf')
 plt.show()
