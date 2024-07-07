@@ -6,9 +6,12 @@ import oracle, greedy, mdpdelay
 
 print("\n Making plots ")
 P, R, d, r0 = 100, 50, 2, 1
+#P, R, d, r0 = 100, 10, 4, 1
+#P, R, d, r0 = 50, 10, 2, 1
 real_scores = np.loadtxt("../similarity_result.txt")[:P, :R]
 random_scores = np.random.rand(P, R)
-unfriendly_scores = np.array([[np.random.choice([1, 0.01])]+[0]*(R-1) for _ in range(P)])
+unfriendly_scores = np.array([[np.random.choice([1, 0.01], p= [0.5, 0.5])]
+                              +[0]*(R-1) for _ in range(P)])
 low_rank_rand_scores = np.random.rand(P, 1) @ np.random.rand(1, R)
 exp_real_scores = np.exp(real_scores)
 exp_real_scores /= np.max(exp_real_scores)
@@ -55,6 +58,6 @@ ax.set_xticklabels(score_dist_names)
 ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
 #plt.show()
 plt.tight_layout()
-plt.savefig('bar-plot-delay-2v7.pgf')
-plt.savefig('bar-plot-delay-2v7.pdf')
+plt.savefig('bar-plot-delay-2v9.pgf')
+plt.savefig('bar-plot-delay-2v9.pdf')
 plt.show()
