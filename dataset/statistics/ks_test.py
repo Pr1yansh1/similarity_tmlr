@@ -30,6 +30,8 @@ from scipy import stats
 random.shuffle(interarrival_times)
 split_idx = len(interarrival_times)//5
 mean_sample, ks_sample = interarrival_times[:split_idx], interarrival_times[split_idx:]
-_, ks_p_value = stats.kstest(interarrival_times,
-                             lambda x:stats.expon.cdf(x, scale=1/np.mean(mean_sample)))
+_, ks_p_value = stats.kstest(ks_sample,
+                             lambda x:stats.expon.cdf(x, scale=np.mean(mean_sample)))
 print(ks_p_value, np.mean(mean_sample), np.mean(ks_sample))
+
+

@@ -51,7 +51,7 @@ def assign_reviewers(data_series):
     lam = 1/np.mean(interarrival_times)
     mu = 1/np.mean(review_times)
     r0 = np.mean([len(reviews) for reviews in review_times])
-    print("true load", lam * r0 / mu / R)
+    print("load", lam * r0 / mu / R)
     ms_in_day = 1000 * 3600 * 24
     print(lam * ms_in_day, mu * ms_in_day, r0, R, P)
     #plt.hist(interarrival_times, bins=50)
@@ -84,6 +84,7 @@ def true_timeseries():
 
 def uniform_timeseries(P, R, d, r0):
     sim_scores = np.random.rand(P, R)
+    sim_scores = np.loadtxt('../similarity_result.txt')[:P, :R]
     arrival_times = list(range(P))
     review_times = P*[(d,)*r0]
 
@@ -101,6 +102,7 @@ def poisson_timeseries(P, R, lam, mu, r0):
 
 def bursty_poisson_timeseries(P, R, lam1, lam2, window_size, mu, r0):
     sim_scores = np.random.rand(P, R)
+    sim_scores = np.loadtxt('../similarity_result.txt')[:P, :R]
 
     # generate arrival timeseries
     arrival_times = []
@@ -131,10 +133,10 @@ print("poisson time series similarity", assign_reviewers(poisson_timeseries(809,
 print("bursty poisson arrival similarity", assign_reviewers(bursty_poisson_timeseries(809, 418, 5, 1, 10, 0.04, 3)))
 
 timeseries_labels = ["Uniform", "Poisson", "Bursty"]
-timeseries = [uniform_timeseries(10, 7, 2, 3), poisson_timeseries(809, 418, 2.5, 0.04, 3),
+timeseries = [uniform_timeseries(809, 418, 62, 3), poisson_timeseries(809, 418, 2.5, 0.04, 3),
               bursty_poisson_timeseries(809, 418, 5, 1, 10, 0.04, 3)]
 values = list(map(assign_reviewers, timeseries))
 plt.bar(timeseries_labels, values)
-plt.xlabel('Timeseries')
-plt.ylabel('Mean Similarity Score')
+#plt.xlabel('Timeseries')
+plt.ylabel('Mean Similarity Per Assignment')
 plt.show()
