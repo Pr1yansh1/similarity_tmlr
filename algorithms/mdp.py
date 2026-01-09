@@ -15,7 +15,7 @@ def mdp(scores, reviews_per_paper = 2, gamma=0.9):
     batch_size = 32
     num_batches = num_papers // batch_size
 
-    for epoch in range(5):
+    for epoch in range(10):
         old_values = np.array(list(values.values()))
 
         for i in range(num_batches):
@@ -44,6 +44,7 @@ def mdp(scores, reviews_per_paper = 2, gamma=0.9):
                         for action in actions}
         return max(q_values, key=q_values.get)
 
+    print(values)
     return policy
 
 
@@ -65,4 +66,4 @@ def assign(scores, reviews_per_paper = 2):
 
 #scores = np.loadtxt('similarity_result.txt')[:, 10:20]
 #scores = np.array([[np.random.choice([1, 0.01]), 0, 0] for _ in range(64)])
-#mdp_assign = find_mdp(scores, reviews_per_paper=1)
+#mdp_assign = mdp(scores, reviews_per_paper=1)

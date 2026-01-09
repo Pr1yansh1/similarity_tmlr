@@ -37,8 +37,8 @@ def assign(scores, review_time = 6, min_reviewer_per_paper = 3):
 
     return greedy_assign
 
-def assign(scores, min_reviewer_per_paper=3):
-    return rankdata(-scores) <= min_reviewer_per_paper
+# def assign(scores, min_reviewer_per_paper=3):
+#     return rankdata(-scores) <= min_reviewer_per_paper
 
 
 
